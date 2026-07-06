@@ -1153,12 +1153,80 @@ async function loadStrategies() {
   const data = await fetch(API + "/strategies").then(r => r.json());
   const el = document.getElementById("strategyList");
   if (!data || data.length === 0) { el.innerHTML = '<div class="empty">暂无策略</div>'; return; }
-  let html = "<table><thead><tr><th>ID</th><th>名称</th><th>优先级</th><th>触发条件</th><th>步骤</th><th>状态</th></tr></thead><tbody>";
+  let html = "<table><thead><tr><th>ID</th><th>名称</th><th>优先级</th><th>触发条件</th><th>步骤</th><th>状态</th><th>操作</th></tr></thead><tbody>";
   data.forEach(s => {
-    html += `<tr><td>${s.strategy_id}</td><td>${s.name}</td><td>${s.priority}</td><td>${(s.triggers||[]).length}</td><td>${(s.steps||[]).length}</td><td><span class="tag ${s.enabled?'tag-success':'tag-warning'}">${s.enabled?"已启用":"已禁用"}</span></td></tr>`;
+    const sid = escapeHtml(s.strategy_id);
+    html += `<tr>
+      <td style="font-family:monospace">${sid}</td>
+      <td>${escapeHtml(s.name)}</td>
+      <td>${s.priority}</td>
+      <td>${(s.triggers||[]).length}</td>
+      <td>${(s.steps||[]).length}</td>
+      <td><span class="tag ${s.enabled?'tag-success':'tag-warning'}">${s.enabled?"已启用":"已禁用"}</span></td>
+      <td><button class="btn btn-sm btn-danger" onclick="deleteStrategy('${encodeURIComponent(s.strategy_id)}','${encodeURIComponent(s.name || s.strategy_id)}')">删除</button></td>
+    </tr>`;
+    html += `<tr><td colspan="7" style="background:rgba(255,255,255,.02)">
+      <details>
+        <summary style="cursor:pointer;color:var(--primary);font-size:12px">查看触发条件和执行步骤详情</summary>
+        ${renderStrategyDetail(s)}
+      </details>
+    </td></tr>`;
   });
   html += "</tbody></table>";
   el.innerHTML = html;
+}
+
+function escapeHtml(v) {
+  return String(v ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+const FIELD_LABELS = {source_ip:"源IP", dest_ip:"目标IP", protocol:"协议", port:"端口"};
+const OP_LABELS = {eq:"等于", ne:"不等于", gt:"大于", lt:"小于", in:"属于", contains:"包含", regex:"正则", exists:"存在"};
+const AGENT_LABELS = {security_agent:"安全审查Agent", policy_agent:"策略分析Agent", monitor_agent:"监控Agent"};
+const ACTION_LABELS = {audit:"安全审计", compliance_check:"合规检查", analyze:"策略分析", health_check:"健康检查", analyze_anomaly:"异常分析"};
+
+function renderStrategyDetail(strategy) {
+  const triggers = strategy.triggers || [];
+  const steps = strategy.steps || [];
+  let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">';
+  html += '<div><div style="font-size:12px;font-weight:600;margin-bottom:6px">触发条件</div>';
+  if (!triggers.length) {
+    html += '<div class="empty" style="padding:12px">无触发条件</div>';
+  } else {
+    html += '<table><thead><tr><th>字段</th><th>操作符</th><th>值</th></tr></thead><tbody>';
+    triggers.forEach(t => {
+      const val = Array.isArray(t.value) ? t.value.join(", ") : t.value;
+      html += `<tr><td>${FIELD_LABELS[t.field] || escapeHtml(t.field)}</td><td>${OP_LABELS[t.operator] || escapeHtml(t.operator)}</td><td style="font-family:monospace">${escapeHtml(val)}</td></tr>`;
+    });
+    html += '</tbody></table>';
+  }
+  html += '</div><div><div style="font-size:12px;font-weight:600;margin-bottom:6px">执行步骤</div>';
+  if (!steps.length) {
+    html += '<div class="empty" style="padding:12px">无执行步骤</div>';
+  } else {
+    html += '<table><thead><tr><th>步骤ID</th><th>Agent</th><th>动作</th><th>超时</th></tr></thead><tbody>';
+    steps.forEach(st => {
+      html += `<tr><td style="font-family:monospace">${escapeHtml(st.step_id)}</td><td>${AGENT_LABELS[st.agent] || escapeHtml(st.agent)}</td><td>${ACTION_LABELS[st.action] || escapeHtml(st.action)}</td><td>${escapeHtml(st.timeout || 30)}s</td></tr>`;
+      if (st.params && Object.keys(st.params).length) {
+        html += `<tr><td colspan="4" style="font-size:11px;color:var(--text2);font-family:monospace">params: ${escapeHtml(JSON.stringify(st.params))}</td></tr>`;
+      }
+    });
+    html += '</tbody></table>';
+  }
+  html += '</div></div>';
+  return html;
+}
+
+async function deleteStrategy(encodedStrategyId, encodedStrategyName) {
+  const strategyId = decodeURIComponent(encodedStrategyId);
+  const strategyName = decodeURIComponent(encodedStrategyName || encodedStrategyId);
+  if (!confirm(`确定删除策略 "${strategyName || strategyId}" 吗？\n\n删除后会进入回收站，30 天内可恢复。`)) return;
+  const r = await fetch(`${API}/strategies/${encodeURIComponent(strategyId)}`, {method:'DELETE'}).then(r => r.json());
+  if (r.deleted) {
+    alert('已删除，策略已进入回收站');
+    loadStrategies();
+  } else {
+    alert('删除失败：未找到该策略');
+  }
 }
 
 // ====== 回收站 ======
@@ -1232,8 +1300,9 @@ async function purgeStrategy(strategyId) {
 }
 function addTrigger() {
   const d = document.createElement("div"); d.className = "dynamic-row";
-  d.innerHTML = '<div class="form-group"><select class="t-field"><option value="source_ip">源IP</option><option value="dest_ip">目标IP</option><option value="protocol">协议</option><option value="port">端口</option></select></div><div class="form-group"><select class="t-op"><option value="eq">等于</option><option value="ne">不等于</option><option value="gt">大于</option><option value="lt">小于</option><option value="in">属于</option><option value="contains">包含</option><option value="regex">正则</option><option value="exists">存在</option></select></div><div class="form-group"><input class="t-val" placeholder="值"></div><button class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">✖</button>';
+  d.innerHTML = triggerRowHtml();
   document.getElementById("triggerList").appendChild(d);
+  updateTriggerInput(d);
 }
 function addStep() {
   const d = document.createElement("div"); d.className = "dynamic-row";
@@ -1241,14 +1310,104 @@ function addStep() {
   document.getElementById("stepList").appendChild(d);
 }
 async function doAddStrategy() {
-  const triggers = Array.from(document.querySelectorAll("#triggerList .dynamic-row")).map(r => ({field: r.querySelector(".t-field").value, operator: r.querySelector(".t-op").value, value: r.querySelector(".t-val").value}));
+  let triggers;
+  try {
+    triggers = Array.from(document.querySelectorAll("#triggerList .dynamic-row")).map((r, i) => parseTriggerRow(r, i + 1));
+  } catch (e) {
+    show(document.getElementById("strategyOutput"), e.message, "error");
+    return;
+  }
   const steps = Array.from(document.querySelectorAll("#stepList .dynamic-row")).map(r => ({step_id: r.querySelector(".s-id").value, agent: r.querySelector(".s-agent").value, action: r.querySelector(".s-action").value, params: {}, timeout: 30}));
   const body = {id: document.getElementById("sId").value, name: document.getElementById("sName").value, enabled: true, priority: parseInt(document.getElementById("sPriority").value)||100, triggers, steps};
   if (!body.id || !body.name) { show(document.getElementById("strategyOutput"), "策略ID和名称不能为空", "error"); return; }
   const r = await fetch(API + "/strategies", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)}).then(r => r.json());
-  show(document.getElementById("strategyOutput"), "策略 \"" + body.name + "\" 已成功添加", "success");
-  loadStrategies();
+  if (r.status === "ok") {
+    show(document.getElementById("strategyOutput"), r.message || ("策略 \"" + body.name + "\" 已成功添加"), "success");
+    loadStrategies();
+  } else {
+    show(document.getElementById("strategyOutput"), r.message || "添加失败", "error");
+  }
 }
+
+function triggerRowHtml() {
+  return '<div class="form-group"><select class="t-field"><option value="source_ip">源IP</option><option value="dest_ip">目标IP</option><option value="protocol">协议</option><option value="port">端口</option></select></div><div class="form-group"><select class="t-op"><option value="eq">等于</option><option value="ne">不等于</option><option value="gt">大于</option><option value="lt">小于</option><option value="in">属于</option><option value="contains">包含</option><option value="regex">正则</option><option value="exists">存在</option></select></div><div class="form-group"><input class="t-val" placeholder="值"></div><button class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">✖</button>';
+}
+
+function updateTriggerInput(row) {
+  const field = row.querySelector(".t-field").value;
+  const op = row.querySelector(".t-op").value;
+  const input = row.querySelector(".t-val");
+  input.disabled = op === "exists";
+  input.type = field === "port" && op !== "in" ? "number" : "text";
+  input.min = field === "port" ? "0" : "";
+  input.max = field === "port" ? "65535" : "";
+  if (op === "exists") {
+    input.value = "";
+    input.placeholder = "存在判断无需输入";
+  } else if (field === "port" && op === "in") {
+    input.placeholder = "端口列表，如 22,80,443";
+  } else if (field === "port") {
+    input.placeholder = "0-65535";
+  } else if (field === "protocol" && op === "in") {
+    input.placeholder = "协议列表，如 http,https,tcp";
+  } else if (field === "protocol") {
+    input.placeholder = "tcp/udp/http/https/ftp/smtp/icmp";
+  } else if (op === "regex") {
+    input.placeholder = "正则表达式";
+  } else {
+    input.placeholder = "值";
+  }
+}
+
+function parseTriggerRow(row, index) {
+  const field = row.querySelector(".t-field").value;
+  const operator = row.querySelector(".t-op").value;
+  const raw = row.querySelector(".t-val").value.trim();
+  if (operator === "exists") return {field, operator, value: true};
+  if (!raw) throw new Error(`第 ${index} 个触发条件的值不能为空`);
+
+  if (field === "port") {
+    if (operator === "contains" || operator === "regex") throw new Error(`第 ${index} 个条件：端口不支持“包含/正则”`);
+    if (operator === "in") {
+      const ports = raw.split(",").map(v => parseInt(v.trim(), 10));
+      if (!ports.length || ports.some(p => !Number.isInteger(p) || p < 0 || p > 65535)) throw new Error(`第 ${index} 个条件：端口列表必须是 0-65535 的数字，用逗号分隔`);
+      return {field, operator, value: ports};
+    }
+    const port = parseInt(raw, 10);
+    if (!Number.isInteger(port) || String(port) !== raw || port < 0 || port > 65535) throw new Error(`第 ${index} 个条件：端口必须是 0-65535 的整数`);
+    return {field, operator, value: port};
+  }
+
+  if (field === "protocol") {
+    const allowed = ["tcp","udp","http","https","ftp","smtp","icmp"];
+    const values = operator === "in" ? raw.split(",").map(v => v.trim().toLowerCase()).filter(Boolean) : [raw.toLowerCase()];
+    if (values.some(v => !allowed.includes(v))) throw new Error(`第 ${index} 个条件：协议只能是 ${allowed.join(", ")}`);
+    return {field, operator, value: operator === "in" ? values : values[0]};
+  }
+
+  if (operator === "gt" || operator === "lt") throw new Error(`第 ${index} 个条件：IP 字段不支持“大于/小于”`);
+  const ipPattern = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+  if (operator === "in") {
+    const ips = raw.split(",").map(v => v.trim()).filter(Boolean);
+    if (!ips.length || ips.some(v => !ipPattern.test(v))) throw new Error(`第 ${index} 个条件：IP 列表格式不正确`);
+    return {field, operator, value: ips};
+  }
+  if (operator === "regex") {
+    try { new RegExp(raw); } catch (e) { throw new Error(`第 ${index} 个条件：正则表达式无效`); }
+  } else if (!ipPattern.test(raw)) {
+    throw new Error(`第 ${index} 个条件：IP 地址格式不正确`);
+  }
+  return {field, operator, value: raw};
+}
+
+document.addEventListener("change", function(e) {
+  if (e.target.classList && (e.target.classList.contains("t-field") || e.target.classList.contains("t-op"))) {
+    updateTriggerInput(e.target.closest(".dynamic-row"));
+  }
+});
+document.addEventListener("DOMContentLoaded", function() {
+  document.querySelectorAll("#triggerList .dynamic-row").forEach(updateTriggerInput);
+});
 
 // ====== 模型预设 ======
 // 所有预定义厂商都遵循 OpenAI 兼容协议（/v1/chat/completions 格式）

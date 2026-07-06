@@ -1,4 +1,7 @@
-from pydantic import BaseModel, Field, field_validator
+import ipaddress
+import re
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import TypedDict, Any, Annotated
 from operator import add
 
@@ -36,6 +39,94 @@ class GraphState(TypedDict, total=False):
 # ===== Pydantic 请求模型（API入口校验） =====
 
 
+class TriggerConfig(BaseModel):
+    """策略触发条件模型，负责按字段和操作符校验 value 类型。"""
+    field: str = Field(description="字段名，如 source_ip/dest_ip/protocol/port")
+    operator: str = Field(description="操作符：eq/ne/gt/lt/contains/in/regex/exists")
+    value: Any = Field(default="", description="比较值")
+
+    @field_validator("field")
+    @classmethod
+    def validate_field(cls, v):
+        allowed = {"source_ip", "dest_ip", "protocol", "port"}
+        if v not in allowed:
+            raise ValueError(f"field 必须是 {allowed} 之一")
+        return v
+
+    @field_validator("operator")
+    @classmethod
+    def validate_operator(cls, v):
+        allowed = {"eq", "ne", "gt", "lt", "contains", "in", "regex", "exists"}
+        if v not in allowed:
+            raise ValueError(f"operator 必须是 {allowed} 之一")
+        return v
+
+    @model_validator(mode="after")
+    def validate_value_by_type(self):
+        if self.operator == "exists":
+            self.value = True
+            return self
+
+        if self.field == "port":
+            if self.operator in {"contains", "regex"}:
+                raise ValueError("port 不支持 contains/regex 操作符")
+            if self.operator == "in":
+                values = self.value if isinstance(self.value, list) else str(self.value).split(",")
+                self.value = [self._parse_port(v) for v in values]
+            else:
+                self.value = self._parse_port(self.value)
+            return self
+
+        if self.field == "protocol":
+            if self.operator in {"gt", "lt", "regex"}:
+                raise ValueError("protocol 不支持 gt/lt/regex 操作符")
+            allowed_protocols = {"tcp", "udp", "http", "https", "ftp", "smtp", "icmp"}
+            values = self.value if isinstance(self.value, list) else (
+                str(self.value).split(",") if self.operator == "in" else [self.value]
+            )
+            normalized = [str(v).strip().lower() for v in values if str(v).strip()]
+            if not normalized or any(v not in allowed_protocols for v in normalized):
+                raise ValueError(f"protocol 必须是 {allowed_protocols} 之一")
+            self.value = normalized if self.operator == "in" else normalized[0]
+            return self
+
+        if self.field in {"source_ip", "dest_ip"}:
+            if self.operator in {"gt", "lt"}:
+                raise ValueError("IP 字段不支持 gt/lt 操作符")
+            if self.operator == "regex":
+                re.compile(str(self.value))
+                return self
+            if self.operator == "in":
+                values = self.value if isinstance(self.value, list) else str(self.value).split(",")
+                self.value = [self._parse_ip(v) for v in values]
+            else:
+                self.value = self._parse_ip(self.value)
+            return self
+
+        return self
+
+    @staticmethod
+    def _parse_port(v):
+        if isinstance(v, bool):
+            raise ValueError("port 必须是 0-65535 的整数")
+        try:
+            port = int(str(v).strip())
+        except (TypeError, ValueError):
+            raise ValueError("port 必须是 0-65535 的整数")
+        if port < 0 or port > 65535:
+            raise ValueError("port 必须是 0-65535 的整数")
+        return port
+
+    @staticmethod
+    def _parse_ip(v):
+        value = str(v).strip()
+        try:
+            ipaddress.ip_address(value)
+        except ValueError:
+            raise ValueError("IP 地址格式不正确")
+        return value
+
+
 class StrategyConfig(BaseModel):
     """策略配置模型"""
     id: str = Field(description="策略唯一标识")
@@ -43,7 +134,7 @@ class StrategyConfig(BaseModel):
     description: str = Field(default="", description="策略描述")
     enabled: bool = Field(default=True, description="是否启用")
     priority: int = Field(default=100, ge=1, le=999, description="优先级，数值越小优先级越高")
-    triggers: list[dict] = Field(default_factory=list, description="触发条件列表")
+    triggers: list[TriggerConfig] = Field(default_factory=list, description="触发条件列表")
     steps: list[dict] = Field(default_factory=list, description="执行步骤列表")
 
 

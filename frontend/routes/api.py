@@ -36,7 +36,7 @@ async def add_strategy(config: StrategyConfig):
         description=config.description,
         enabled=config.enabled,
         priority=config.priority,
-        triggers=config.triggers,
+        triggers=[t.model_dump() for t in config.triggers],
         steps=config.steps,
     )
     result_status, diff_reason = app["engine"].add_strategy(strategy)
