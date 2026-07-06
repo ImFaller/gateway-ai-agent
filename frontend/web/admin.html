@@ -1,0 +1,2061 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>网闸AI设备智能体管理平台</title>
+<style>
+:root{--bg:#0a0e17;--surface:#131926;--card:#1a2235;--border:#1e2a45;--text:#e2e8f0;--text2:#8892a8;--primary:#3b82f6;--primary-hover:#2563eb;--success:#22c55e;--warning:#f59e0b;--danger:#ef4444;--sidebar-w:220px;--input-bg:#0d1321}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex}
+a{color:var(--primary);text-decoration:none}
+
+/* Sidebar */
+.sidebar{width:var(--sidebar-w);min-height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;left:0;top:0;z-index:100}
+.sidebar-header{padding:16px 18px;border-bottom:1px solid var(--border);font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.sidebar-header span{color:var(--primary)}
+.sidebar-nav{flex:1;padding:8px;overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:6px;font-size:13px;cursor:pointer;transition:all .15s;color:var(--text2);border:none;background:none;width:100%;text-align:left}
+.nav-item:hover{background:rgba(59,130,246,.1);color:var(--text)}
+.nav-item.active{background:var(--primary);color:#fff}
+.nav-icon{font-size:16px;width:20px;text-align:center}
+
+/* Main Content */
+.main{margin-left:var(--sidebar-w);flex:1;padding:24px 28px;max-width:calc(100vw - var(--sidebar-w))}
+.pane{display:none}
+.pane.active{display:block}
+.pane-title{font-size:18px;font-weight:600;margin-bottom:20px;display:flex;align-items:center;gap:8px}
+
+/* Card */
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px}
+.card-title{font-size:14px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px;color:var(--text2)}
+
+/* Form */
+.form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:12px}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-group label{font-size:12px;color:var(--text2)}
+.form-group input,.form-group select,.form-group textarea{padding:8px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none}
+.form-group input:focus,.form-group select:focus{border-color:var(--primary)}
+.form-group textarea{resize:vertical;min-height:50px;font-family:monospace;font-size:12px}
+select option{background:var(--surface);color:var(--text)}
+
+/* Buttons */
+.btn{padding:8px 18px;border-radius:6px;border:none;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
+.btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-hover)}
+.btn-success{background:var(--success);color:#fff}.btn-success:hover{background:#16a34a}
+.btn-danger{background:var(--danger);color:#fff}.btn-danger:hover{background:#dc2626}
+.btn-sm{padding:4px 10px;font-size:11px}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--text2);color:var(--text)}
+
+/* Output */
+.output{padding:14px;border-radius:6px;margin-top:12px;font-size:13px;line-height:1.6;display:none;border:1px solid}
+.output.show{display:block}
+.output.success{border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.08);color:var(--success)}
+.output.warning{border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.08);color:var(--warning)}
+.output.error{border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:var(--danger)}
+.output.info{border-color:rgba(59,130,246,.3);background:rgba(59,130,246,.08);color:var(--primary)}
+
+/* Table */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border)}
+th{color:var(--text2);font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:500}
+td{font-size:12px}
+tbody tr:hover{background:rgba(255,255,255,.015)}
+
+/* Tags */
+.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
+.tag-success{background:rgba(34,197,94,.15);color:var(--success)}
+.tag-danger{background:rgba(239,68,68,.15);color:var(--danger)}
+.tag-warning{background:rgba(245,158,11,.15);color:var(--warning)}
+.tag-info{background:rgba(59,130,246,.15);color:var(--primary)}
+
+/* Chat */
+.chat-box{height:480px;overflow-y:auto;padding:12px;background:var(--input-bg);border-radius:8px;margin-bottom:12px;display:flex;flex-direction:column;gap:8px;resize:vertical;min-height:200px;max-height:80vh}
+.msg{max-width:85%;padding:10px 14px;border-radius:10px;font-size:13px;line-height:1.5;animation:fadeIn .2s}
+.msg.user{background:var(--primary);color:#fff;align-self:flex-end;border-bottom-right-radius:2px}
+.msg.assistant{background:var(--card);border:1px solid var(--border);align-self:flex-start;border-bottom-left-radius:2px}
+.msg.system{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);color:var(--warning);align-self:center;font-size:12px;text-align:center;max-width:70%}
+.msg .time{font-size:10px;color:var(--text2);margin-top:4px;opacity:.6}
+.chat-input{display:flex;gap:8px;align-items:flex-end}
+.chat-input textarea{flex:1;padding:10px 14px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;outline:none;resize:vertical;min-height:42px;max-height:240px;font-family:inherit;line-height:1.5;transition:min-height .15s}
+.chat-input textarea:focus{border-color:var(--primary)}
+.chat-input .btn{padding:10px 20px}
+.chat-input .btn-sm{padding:6px 10px;font-size:11px}
+.chat-loading{color:var(--text2);font-size:12px;padding:8px;text-align:center;align-self:center}
+.chat-loading::after{content:"...";animation:dots 1.5s infinite}
+@keyframes dots{0%,20%{content:"."}40%{content:".."}60%,100%{content:"..."}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* Dynamic rows */
+.dynamic-row{display:flex;gap:8px;margin-bottom:8px;align-items:flex-end}
+.dynamic-row .form-group{flex:1}
+
+/* Stats grid */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.stat-box{text-align:center;padding:16px;background:var(--card);border:1px solid var(--border);border-radius:8px}
+.stat-box .stat-label{font-size:11px;color:var(--text2);margin-bottom:4px}
+.stat-box .stat-val{font-size:22px;font-weight:700}
+
+/* Empty state */
+.empty{text-align:center;padding:28px;color:var(--text2);font-size:13px}
+
+.fab{position:fixed;bottom:28px;right:28px;width:56px;height:56px;border-radius:50%;background:var(--primary);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 4px 20px rgba(59,130,246,.4);z-index:200;transition:all .2s;color:#fff}
+.fab:hover{transform:scale(1.08)}
+.fab .badge{position:absolute;top:-4px;right:-4px;width:10px;height:10px;border-radius:50%;background:var(--success);border:2px solid var(--bg)}
+.chat-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:298;display:none;opacity:0;transition:opacity .25s}
+.chat-overlay.show{display:block;opacity:1}
+.chat-slider{position:fixed;top:0;right:-420px;width:400px;height:100vh;background:var(--surface);border-left:1px solid var(--border);z-index:299;transition:right .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column}
+.chat-slider.open{right:0}
+.chat-slider-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+.chat-slider-header h3{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.chat-slider-close{background:none;border:none;color:var(--text2);cursor:pointer;font-size:20px;padding:4px;line-height:1}
+.chat-slider-body{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px;min-height:200px}
+.chat-slider-input{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border);align-items:flex-end}
+.chat-slider-input textarea{flex:1;padding:10px 14px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;outline:none;resize:vertical;min-height:42px;max-height:240px;font-family:inherit;line-height:1.5;transition:min-height .15s}
+.chat-slider-input textarea:focus{border-color:var(--primary)}
+.chat-slider-input .btn{padding:10px 18px}
+.chat-slider-input .btn-sm{padding:6px 10px;font-size:11px}
+
+/* Settings */
+.icon-option{width:44px;height:44px;border-radius:8px;border:2px solid var(--border);background:var(--card);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.icon-option:hover{border-color:var(--primary)}
+.icon-option.active{border-color:var(--primary);background:rgba(59,130,246,.15)}
+select option{background:var(--surface);color:var(--text)}
+</style>
+</head>
+<body>
+<div class="sidebar">
+  <div class="sidebar-header"><span>&#x1f6e1;&#xfe0f;</span> AI设备智能体</div>
+  <div class="sidebar-nav">
+    <button class="nav-item active" data-pane="overview"><span class="nav-icon">&#x1f3e0;</span>操作面板</button>
+    
+    <button class="nav-item" data-pane="execute"><span class="nav-icon">&#x1f500;</span>策略编排</button>
+    <button class="nav-item" data-pane="strategies"><span class="nav-icon">&#x1f4cb;</span>策略管理</button>
+    <button class="nav-item" data-pane="models"><span class="nav-icon">&#x2699;&#xfe0f;</span>模型配置</button>
+    <button class="nav-item" data-pane="records"><span class="nav-icon">&#x1f4dd;</span>执行记录</button>
+    <button class="nav-item" data-pane="dashboard"><span class="nav-icon">&#x1f4ca;</span>监控看板</button>
+    <button class="nav-item" data-pane="health"><span class="nav-icon">&#x1f50d;</span>系统状态</button>
+    <button class="nav-item" data-pane="audit"><span class="nav-icon">&#x1f4dc;</span>审计日志</button>
+    <button class="nav-item" data-pane="settings"><span class="nav-icon">&#x2699;&#xfe0f;</span>设置</button>
+  </div>
+</div>
+
+<div class="main">
+<!-- ========== 操作面板 ========== -->
+<div class="pane active" id="pane-overview">
+  <div class="pane-title">&#x1f3e0; 操作面板</div>
+  <div class="stats-grid" id="overviewStats"></div>
+  <div class="card" style="margin-top:16px"><div class="card-title">&#x1f4ac; 快速操作</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="toggleChat()">&#x1f4ac; 与智能体对话</button>
+      <button class="btn btn-success" onclick="switchPane('execute')">&#x1f500; 执行策略编排</button>
+      <button class="btn btn-ghost" onclick="switchPane('models')">&#x2699;&#xfe0f; 配置模型</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 智能体对话 ========== -->
+<div class="pane" id="pane-chat">
+  <div class="pane-title">&#x1f4ac; 智能体对话</div>
+  <div class="card">
+    <div class="chat-box" id="chatBox">
+      <div class="msg assistant">你好！我是网闸AI设备智能体的操作助手。我可以帮你：<br><br>1. &#x1f4cb; <b>添加策略</b> — 描述你的安全需求，我帮你生成策略配置<br>2. &#x1f500; <b>执行编排</b> — 告诉我场景，我帮你执行策略编排<br>3. &#x1f4ca; <b>查看状态</b> — 查询系统运行状态和指标<br><br>请告诉我你想做什么？</div>
+    </div>
+    <div class="chat-input">
+      <textarea id="chatInput" placeholder="输入你的需求，例如：帮我添加一条SSH防护策略...&#10;(Enter 发送，Shift+Enter 换行)" onkeydown="onChatKeydown(event)" rows="2"></textarea>
+      <button class="btn btn-ghost btn-sm" onclick="toggleChatInputExpand()" id="chatInputToggleBtn" title="展开/收起输入框">&#x2B12;</button>
+      <button class="btn btn-primary" onclick="sendChat()">&#x1f680; 发送</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearChat()">清空</button>
+    </div>
+    <div class="output" id="chatOutput"></div>
+  </div>
+</div>
+
+<!-- ========== 策略编排 ========== -->
+<div class="pane" id="pane-execute">
+  <div class="pane-title">&#x1f500; 策略编排</div>
+  <div class="card">
+    <div class="form-row">
+      <div class="form-group"><label>源IP地址</label><input id="srcIp" value="61.144.15.22"></div>
+      <div class="form-group"><label>目标IP地址</label><input id="dstIp" value="10.0.0.5"></div>
+      <div class="form-group"><label>网络协议</label><select id="protocol"><option>tcp</option><option>udp</option><option>http</option><option>https</option><option>ftp</option><option>smtp</option></select></div>
+      <div class="form-group"><label>端口号</label><input id="port" value="22" type="number"></div>
+    </div>
+    <div class="form-group"><label>数据内容（可选）</label><textarea id="content"></textarea></div>
+    <button class="btn btn-primary" onclick="doExecute()">&#x1f680; 执行编排</button>
+    <div class="output" id="executeOutput"></div>
+  </div>
+</div>
+
+<!-- ========== 策略管理 ========== -->
+<div class="pane" id="pane-strategies">
+  <div class="pane-title">&#x1f4cb; 策略管理</div>
+  <div class="card">
+    <div class="card-title">当前策略列表
+      <button class="btn btn-sm btn-ghost" onclick="loadStrategies()" style="margin-left:auto">&#x1f504; 刷新</button>
+      <button class="btn btn-sm btn-ghost" onclick="loadTrash()">&#x1f5d1;&#xfe0f; 回收站</button>
+    </div>
+    <div id="strategyList"><div class="empty">点击刷新查看策略列表</div></div>
+  </div>
+
+  <!-- 回收站弹窗 -->
+  <dialog id="trashDialog" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);margin:0;padding:0;border:none;background:transparent;max-width:none;max-height:none">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:0;width:680px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <div style="font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px">
+          <span>&#x1f5d1;&#xfe0f;</span> 策略回收站
+        </div>
+        <button onclick="document.getElementById('trashDialog').close()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:20px;padding:4px;line-height:1">&#x2716;</button>
+      </div>
+      <div style="padding:12px 20px;border-bottom:1px solid var(--border);background:rgba(245,158,11,.06);font-size:12px;color:var(--text2);line-height:1.6">
+        软删除的策略会保留 <strong style="color:var(--warning)">30 天</strong>，期间可恢复。30 天后自动永久删除。<br>
+        恢复时如果原 ID 已被新策略占用，会提示冲突，需要指定新 ID。
+      </div>
+      <div id="trashList" style="flex:1;overflow-y:auto;padding:8px 12px"></div>
+    </div>
+  </dialog>
+  <div class="card">
+    <div class="card-title">&#x2795; 添加新策略</div>
+    <div class="form-row">
+      <div class="form-group"><label>策略ID</label><input id="sId" placeholder="my_policy"></div>
+      <div class="form-group"><label>策略名称</label><input id="sName" placeholder="自定义策略"></div>
+      <div class="form-group"><label>优先级</label><input id="sPriority" value="50" type="number"></div>
+    </div>
+    <div class="card-title" style="font-size:13px;margin-top:12px">触发条件</div>
+    <div id="triggerList">
+      <div class="dynamic-row">
+        <div class="form-group"><select class="t-field"><option value="source_ip">源IP</option><option value="dest_ip">目标IP</option><option value="protocol">协议</option><option value="port">端口</option></select></div>
+        <div class="form-group"><select class="t-op"><option value="eq">等于</option><option value="ne">不等于</option><option value="gt">大于</option><option value="lt">小于</option><option value="in">属于</option><option value="contains">包含</option><option value="regex">正则</option><option value="exists">存在</option></select></div>
+        <div class="form-group"><input class="t-val" placeholder="值" value="22"></div>
+        <button class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">&#x2716;</button>
+      </div>
+    </div>
+    <button class="btn btn-sm btn-ghost" onclick="addTrigger()" style="margin:4px 0 12px">+ 添加条件</button>
+    <div class="card-title" style="font-size:13px">执行步骤</div>
+    <div id="stepList">
+      <div class="dynamic-row">
+        <div class="form-group"><input class="s-id" placeholder="步骤ID" value="step_01"></div>
+        <div class="form-group"><select class="s-agent"><option value="security_agent">安全审查Agent</option><option value="policy_agent">策略分析Agent</option><option value="monitor_agent">监控Agent</option></select></div>
+        <div class="form-group"><select class="s-action"><option value="audit">安全审计</option><option value="compliance_check">合规检查</option><option value="analyze">策略分析</option><option value="health_check">健康检查</option><option value="analyze_anomaly">异常分析</option></select></div>
+        <button class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">&#x2716;</button>
+      </div>
+    </div>
+    <button class="btn btn-sm btn-ghost" onclick="addStep()" style="margin:4px 0 12px">+ 添加步骤</button>
+    <button class="btn btn-success" onclick="doAddStrategy()">&#x2705; 添加策略</button>
+    <div class="output" id="strategyOutput"></div>
+  </div>
+</div>
+
+<!-- ========== 模型配置 ========== -->
+<div class="pane" id="pane-models">
+  <div class="pane-title">&#x2699;&#xfe0f; 模型配置</div>
+  <div class="card">
+    <div class="card-title">已配置模型 <button class="btn btn-sm btn-ghost" onclick="loadModels()" style="margin-left:auto">&#x1f504; 刷新</button></div>
+    <div id="modelList"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">&#x2795; 模型预设（点击快速填表）</div>
+    <div style="margin-bottom:10px;font-size:12px;color:var(--text2)">国内厂商</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <button class="btn btn-sm" onclick="presetModel('deepseek')" style="background:#f59e0b;color:#fff">DeepSeek</button>
+      <button class="btn btn-sm" onclick="presetModel('qwen')" style="background:#6366f1;color:#fff">通义千问</button>
+      <button class="btn btn-sm" onclick="presetModel('glm')" style="background:#3b82f6;color:#fff">智谱 GLM</button>
+      <button class="btn btn-sm" onclick="presetModel('kimi')" style="background:#0f172a;color:#fff;border:1px solid var(--border)">Moonshot Kimi</button>
+      <button class="btn btn-sm" onclick="presetModel('doubao')" style="background:#ef4444;color:#fff">字节豆包</button>
+      <button class="btn btn-sm" onclick="presetModel('baichuan')" style="background:#22c55e;color:#fff">百川</button>
+      <button class="btn btn-sm" onclick="presetModel('minimax')" style="background:#a855f7;color:#fff">MiniMax</button>
+      <button class="btn btn-sm" onclick="presetModel('yi')" style="background:#0ea5e9;color:#fff">零一 Yi</button>
+      <button class="btn btn-sm" onclick="presetModel('hunyuan')" style="background:#0284c7;color:#fff">腾讯混元</button>
+      <button class="btn btn-sm" onclick="presetModel('spark')" style="background:#0891b2;color:#fff">讯飞星火</button>
+    </div>
+    <div style="margin-bottom:10px;font-size:12px;color:var(--text2)">海外厂商</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <button class="btn btn-sm btn-ghost" onclick="presetModel('openai')">OpenAI</button>
+      <button class="btn btn-sm btn-ghost" onclick="presetModel('claude')">Anthropic Claude</button>
+      <button class="btn btn-sm btn-ghost" onclick="presetModel('gemini')">Google Gemini</button>
+      <button class="btn btn-sm btn-ghost" onclick="presetModel('grok')">xAI Grok</button>
+      <button class="btn btn-sm btn-ghost" onclick="presetModel('mistral')">Mistral</button>
+    </div>
+    <div style="margin-bottom:10px;font-size:12px;color:var(--text2)">免费/本地</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+      <button class="btn btn-sm" onclick="presetModel('ollama')" style="background:#22c55e;color:#fff">Ollama 本地</button>
+      <button class="btn btn-sm" onclick="presetModel('groq')" style="background:#3b82f6;color:#fff">Groq</button>
+      <button class="btn btn-sm" onclick="presetModel('siliconflow')" style="background:#06b6d4;color:#fff">硅基流动 SiliconFlow</button>
+      <button class="btn btn-sm btn-ghost" onclick="presetModel('openrouter')">OpenRouter（聚合）</button>
+    </div>
+    <div class="card-title">➕ 添加/编辑模型</div>
+    <div id="customHint" style="display:none;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.3);border-radius:6px;padding:12px 14px;margin-bottom:14px;font-size:12px;line-height:1.7;color:var(--text2)">
+      <b style="color:var(--primary)">💡 自定义模型说明</b><br>
+      本项目按 <b>OpenAI 兼容协议</b> 调用模型（即 <code style="background:var(--input-bg);padding:2px 6px;border-radius:4px">{api_base}/chat/completions</code> 接口）。<br>
+      请填写以下字段：<br>
+      • <b>API 地址</b>：填到 <code style="background:var(--input-bg);padding:2px 6px;border-radius:4px">/v1</code> 这一级即可，不要带 <code style="background:var(--input-bg);padding:2px 6px;border-radius:4px">/chat/completions</code><br>
+      • <b>模型</b>：填该厂商文档里写的模型名（如 <code style="background:var(--input-bg);padding:2px 6px;border-radius:4px">gpt-4o</code>、<code style="background:var(--input-bg);padding:2px 6px;border-radius:4px">qwen-max</code>）<br>
+      • <b>API Key</b>：从厂商控制台获取<br>
+      常见兼容厂商：OpenAI / DeepSeek / 通义 / 智谱 / Kimi / 硅基流动 / OpenRouter / Groq / Mistral 等。
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>模型ID</label><input id="mId" value="deepseek-chat" placeholder="deepseek-chat"></div>
+      <div class="form-group"><label>显示名称</label><input id="mName" value="DeepSeek Chat" placeholder="DeepSeek Chat"></div>
+      <div class="form-group"><label>提供商</label><select id="mProvider" onchange="onProviderChanged()"><option value="deepseek">DeepSeek</option><option value="qwen">通义千问</option><option value="glm">智谱 GLM</option><option value="kimi">Moonshot Kimi</option><option value="doubao">字节豆包</option><option value="baichuan">百川</option><option value="minimax">MiniMax</option><option value="yi">零一 Yi</option><option value="hunyuan">腾讯混元</option><option value="spark">讯飞星火</option><option value="openai">OpenAI</option><option value="claude">Anthropic Claude</option><option value="gemini">Google Gemini</option><option value="grok">xAI Grok</option><option value="mistral">Mistral</option><option value="groq">Groq</option><option value="ollama">Ollama 本地</option><option value="siliconflow">硅基流动</option><option value="openrouter">OpenRouter</option><option value="custom">自定义（按 OpenAI 兼容格式）</option></select></div>
+      <div class="form-group"><label>模型</label><input id="mModel" value="deepseek-chat" placeholder="deepseek-chat"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>API地址</label><input id="mApiBase" value="https://api.deepseek.com/v1"></div>
+      <div class="form-group"><label>API Key</label><input id="mApiKey" type="password" placeholder="sk-..."></div>
+      <div class="form-group"><label>最大Token</label><input id="mMaxTokens" value="4096" type="number"></div>
+      <div class="form-group"><label>温度</label><input id="mTemp" value="0.7" type="number" step="0.1" min="0" max="2"></div>
+    </div>
+    <button class="btn btn-primary" onclick="testModel()" style="margin-right:8px">⭐ 测试连接</button>
+    <button class="btn btn-success" onclick="doSaveModel()">&#x1f4be; 保存模型</button>
+    <div class="output" id="modelOutput"></div>
+  </div>
+</div>
+
+<!-- ========== 执行记录 ========== -->
+<div class="pane" id="pane-records">
+  <div class="pane-title">&#x1f4dd; 执行记录</div>
+  <div class="card">
+    <button class="btn btn-sm btn-ghost" onclick="loadExecutions()">&#x1f504; 刷新</button>
+    <div id="executionList" style="margin-top:12px"><div class="empty">暂无记录</div></div>
+  </div>
+</div>
+
+<!-- ========== 监控看板 ========== -->
+<div class="pane" id="pane-dashboard">
+  <div class="pane-title">&#x1f4ca; 监控看板</div>
+  <div class="stats-grid" id="dashboardStats"></div>
+  <div class="card" style="margin-top:16px"><div class="card-title">&#x1f4dd; 执行记录</div><div id="dashboardExecs"><div class="empty">暂无记录</div></div></div>
+  <div class="card"><div class="card-title">&#x1f50d; Agent状态</div><div id="dashboardAgents"></div></div>
+</div>
+
+<!-- ========== 系统状态 ========== -->
+<div class="pane" id="pane-health">
+  <div class="pane-title">&#x1f50d; 系统状态</div>
+  <div class="card"><button class="btn btn-success" onclick="checkHealth()">&#x1f3af; 运行健康检查</button><div class="output" id="healthOutput"></div></div>
+  <div class="card"><button class="btn btn-primary" onclick="loadAgents()">&#x1f916; 查看Agent状态</button><div class="output" id="agentOutput"></div></div>
+  <div class="card"><button class="btn btn-ghost" onclick="loadAlerts()">&#x26a0;&#xfe0f; 查看告警</button><div class="output" id="alertOutput"></div></div>
+</div>
+
+<!-- ========== 审计日志 ========== -->
+<div class="pane" id="pane-audit">
+  <div class="pane-title">&#x1f4dc; 审计日志</div>
+  <div class="card">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <div class="form-group" style="flex-direction:row;align-items:center;gap:6px">
+        <label style="margin:0">类别</label>
+        <select id="auditCategory" onchange="renderAuditLogs()" style="padding:6px 10px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;outline:none">
+          <option value="">全部</option>
+          <option value="策略">策略</option>
+          <option value="模型">模型</option>
+          <option value="设置">设置</option>
+          <option value="认证">认证</option>
+          <option value="安全">安全（注入拦截）</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex-direction:row;align-items:center;gap:6px">
+        <label style="margin:0">级别</label>
+        <select id="auditLevel" onchange="renderAuditLogs()" style="padding:6px 10px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;outline:none">
+          <option value="">全部</option>
+          <option value="INFO">INFO</option>
+          <option value="WARNING">WARNING</option>
+          <option value="ERROR">ERROR</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex-direction:row;align-items:center;gap:6px">
+        <label style="margin:0">关键字</label>
+        <input id="auditKeyword" placeholder="搜索 target/result 等..." oninput="renderAuditLogs()" style="padding:6px 10px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;outline:none;width:200px">
+      </div>
+      <button class="btn btn-sm btn-ghost" onclick="loadAuditLogs()">&#x1f504; 刷新</button>
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text2);margin-left:auto;cursor:pointer">
+        <input type="checkbox" id="auditAutoRefresh" onchange="toggleAuditAutoRefresh()"> 自动刷新(5s)
+      </label>
+    </div>
+    <div id="auditStats" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;color:var(--text2)"></div>
+    <div id="auditList" style="max-height:600px;overflow-y:auto"><div class="empty">点击刷新加载审计日志</div></div>
+  </div>
+</div>
+
+<!-- ========== 设置 ========== -->
+<div class="pane" id="pane-settings">
+  <div class="pane-title">&#x2699;&#xfe0f; 设置</div>
+
+  <div class="card">
+    <div class="card-title">&#x1f3a8; 网页背景颜色</div>
+    <div class="form-group">
+      <label>选择主题</label>
+      <select id="settingsBgTheme" onchange="applyBgTheme(this.value)">
+        <option value="dark">深色（默认）</option>
+        <option value="light">浅色</option>
+        <option value="blue">蓝色护眼</option>
+        <option value="green">绿色护眼</option>
+        <option value="custom">自定义颜色</option>
+      </select>
+    </div>
+    <div class="form-group" id="customBgGroup" style="margin-top:12px;display:none">
+      <label>自定义背景色</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="color" id="settingsBgColor" value="#0a0e17" style="width:48px;height:36px;padding:2px;background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer">
+        <input type="text" id="settingsBgColorText" value="#0a0e17" style="width:120px;padding:8px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none" oninput="document.getElementById('settingsBgColor').value=this.value;applyCustomBg(this.value)">
+        <button class="btn btn-primary btn-sm" onclick="applyCustomBg(document.getElementById('settingsBgColor').value)">应用</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">&#x1f4ac; 悬浮窗图标</div>
+    <div class="form-group">
+      <label>选择图标</label>
+      <div id="fabIconPicker" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+        <button class="icon-option active" data-icon="&#x1f4ac;" onclick="selectFabIcon(this)">&#x1f4ac;</button>
+        <button class="icon-option" data-icon="&#x1f916;" onclick="selectFabIcon(this)">&#x1f916;</button>
+        <button class="icon-option" data-icon="&#x1f6e1;&#xfe0f;" onclick="selectFabIcon(this)">&#x1f6e1;&#xfe0f;</button>
+        <button class="icon-option" data-icon="&#x1f50b;" onclick="selectFabIcon(this)">&#x1f50b;</button>
+        <button class="icon-option" data-icon="&#x2b50;" onclick="selectFabIcon(this)">&#x2b50;</button>
+        <button class="icon-option" data-icon="&#x1f4e1;" onclick="selectFabIcon(this)">&#x1f4e1;</button>
+        <button class="icon-option" data-icon="&#x1f5a5;&#xfe0f;" onclick="selectFabIcon(this)">&#x1f5a5;&#xfe0f;</button>
+        <button class="icon-option" data-icon="&#x1f4f1;" onclick="selectFabIcon(this)">&#x1f4f1;</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">&#x1f4dd; 智能体对话标题</div>
+    <div class="form-group">
+      <label>对话窗口标题文字</label>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+        <input type="text" id="settingsChatTitle" value="智能体对话" placeholder="输入标题..." style="flex:1;max-width:300px;padding:8px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none">
+        <button class="btn btn-primary btn-sm" onclick="applyChatTitle()">应用</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">&#x1f511; 系统密码</div>
+    <div class="form-group">
+      <label>旧密码</label>
+      <input type="password" id="oldPwd" placeholder="输入当前密码" style="width:100%;padding:8px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none">
+    </div>
+    <div class="form-group">
+      <label>新密码（至少 6 位）</label>
+      <input type="password" id="newPwd" placeholder="输入新密码" style="width:100%;padding:8px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none">
+    </div>
+    <div class="form-group">
+      <label>确认新密码</label>
+      <input type="password" id="confirmPwd" placeholder="再次输入新密码" style="width:100%;padding:8px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none">
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="changePassword()">&#x1f511; 修改密码</button>
+    <div id="pwdMsg" style="margin-top:8px;font-size:13px;min-height:18px"></div>
+  </div>
+
+  <!-- ========== 主模型选择 ========== -->
+  <div class="card">
+    <div class="card-title">&#x1f9e0; 主模型选择</div>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">
+      选择哪个已添加的模型作为主智能体使用的模型（用于意图识别、参数生成等）。未选择时默认取第一个启用且配置了 API Key 的模型。
+    </p>
+    <div class="form-group">
+      <label>主模型</label>
+      <select id="primaryModelSelect" style="width:100%;padding:8px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none" onchange="onPrimaryModelChanged()">
+        <option value="">-- 默认（取第一个启用模型）--</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- ========== 双模型监视（LLM-as-a-Judge） ========== -->
+  <div class="card">
+    <div class="card-title">&#x1f9d0; 双模型监视（LLM-as-a-Judge）</div>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">
+      借鉴 OpenAI Evals / Hermes MoA 模式：用第二个独立模型审查主模型生成的动作，拦截错误或危险操作。
+      建议使用不同厂商的模型以获得最佳审查效果；下拉已自动排除当前选中的主模型。
+    </p>
+    <div class="form-group">
+      <label>监视强度</label>
+      <select id="verifyStrengthSelect" style="width:100%;padding:8px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none" onchange="saveVerifySettings()">
+        <option value="off">&#x1f6ab1; 关闭（不监视）</option>
+        <option value="warn_only">&#x26a0;&#xfe0f; 仅警告（监视不通过时只提示，仍执行）</option>
+        <option value="high_risk_only">&#x1f6e1;&#xfe0f; 仅高危审查（推荐，仅 add/delete 策略时监视）</option>
+        <option value="strong">&#x1f6e1;&#xfe0f; 强一致（所有动作都需主+监视模型一致同意）</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>监视模型</label>
+      <select id="verifierModelSelect" style="width:100%;padding:8px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none" onchange="saveVerifySettings()">
+        <option value="">-- 请先在模型管理添加监视模型 --</option>
+      </select>
+    </div>
+    <div id="verifySettingsMsg" style="margin-top:8px;font-size:13px;min-height:18px"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">&#x1f527; 操作</div>
+    <button class="btn btn-ghost" onclick="resetSettings()">&#x21a9;&#xfe0f; 恢复默认设置</button>
+  </div>
+</div>
+</div>
+
+<!-- ========== 默认密码强制修改弹窗 ========== -->
+<!-- 浏览器原生 <dialog> 元素：HTML5 标准模态，无需第三方库 -->
+<dialog id="forceChangePwdDialog" style="border:none;border-radius:12px;padding:0;max-width:420px;width:90vw;background:var(--surface);color:var(--text);box-shadow:0 20px 60px rgba(0,0,0,.4)">
+  <div style="padding:24px">
+    <div style="font-size:18px;font-weight:600;margin-bottom:8px">&#x26a0;&#xfe0f; 安全提示</div>
+    <div style="font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:16px">
+      系统当前使用默认密码 <code style="background:rgba(255,180,0,.15);padding:2px 6px;border-radius:4px;color:#fbbf24">123456</code>，存在严重安全隐患。<br>
+      请立即修改密码以保障系统安全。
+    </div>
+    <div class="form-group">
+      <label>新密码（至少 6 位）</label>
+      <input type="password" id="forceNewPwd" placeholder="输入新密码" style="width:100%;padding:8px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none">
+    </div>
+    <div class="form-group">
+      <label>确认新密码</label>
+      <input type="password" id="forceConfirmPwd" placeholder="再次输入新密码" style="width:100%;padding:8px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none">
+    </div>
+    <div id="forcePwdMsg" style="margin-top:8px;font-size:13px;min-height:18px;color:#f87171"></div>
+    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+      <button class="btn btn-primary btn-sm" onclick="forceChangePassword()">&#x1f511; 立即修改</button>
+      <button class="btn btn-ghost btn-sm" onclick="skipForceChange()">稍后提醒</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- ========== 重要操作前密码二次确认弹窗 ========== -->
+<dialog id="verifyPwdDialog" style="border:none;border-radius:12px;padding:0;max-width:380px;width:90vw;background:var(--surface);color:var(--text);box-shadow:0 20px 60px rgba(0,0,0,.4);top:50%;left:50%;transform:translate(-50%,-50%);margin:0">
+  <div style="padding:24px">
+    <div style="font-size:18px;font-weight:600;margin-bottom:8px">&#x1f512; 密码二次确认</div>
+    <div id="verifyActionDesc" style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:16px"></div>
+    <div class="form-group">
+      <label>系统密码</label>
+      <input type="password" id="verifyPwdInput" placeholder="请输入系统密码" style="width:100%;padding:8px 12px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none" onkeydown="if(event.key==='Enter') confirmVerifyPassword()">
+    </div>
+    <div id="verifyPwdMsg" style="margin-top:8px;font-size:13px;min-height:18px;color:#f87171"></div>
+    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+      <button class="btn btn-primary btn-sm" onclick="confirmVerifyPassword()">确认</button>
+      <button class="btn btn-ghost btn-sm" onclick="cancelVerifyPassword()">取消</button>
+    </div>
+    <div style="margin-top:12px;text-align:right;font-size:11px">
+      <a href="#" onclick="toggleResetGuide();return false;" style="color:var(--text2);text-decoration:underline">忘记密码？</a>
+    </div>
+    <div id="resetGuide" style="display:none;margin-top:8px;padding:10px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;font-size:11px;line-height:1.6;color:var(--text2)">
+      <b>重置步骤：</b><br>
+      1. 在服务器上打开命令行<br>
+      2. 进入项目根目录，执行：<br>
+      <code style="display:block;background:#000;padding:6px 8px;margin:6px 0;border-radius:4px;color:#a3e635;white-space:nowrap;overflow-x:auto">python reset_password.py</code>
+      3. 输入 <code>YES</code> 确认重置<br>
+      4. 重启服务，默认密码变为 <code>123456</code><br>
+      5. 登录后会强制要求修改为新密码
+    </div>
+  </div>
+</dialog>
+
+<script>
+
+
+const API = "/api/v1";
+
+// ====== 导航 ======
+document.querySelectorAll(".nav-item").forEach(b => {
+  b.addEventListener("click", () => {
+    switchPane(b.dataset.pane);
+  });
+});
+function switchPane(id) {
+  document.querySelectorAll(".nav-item").forEach(x => x.classList.remove("active"));
+  document.querySelectorAll(".pane").forEach(x => x.classList.remove("active"));
+  var navItem = document.querySelector(`.nav-item[data-pane="${id}"]`);
+  if (navItem) navItem.classList.add("active");
+  var pane = document.getElementById("pane-" + id);
+  if (pane) pane.classList.add("active");
+  if (id === "overview") loadOverview();
+  if (id === "dashboard") loadDashboard();
+  if (id === "settings") loadSettings();
+  if (id === "audit") loadAuditLogs();
+}
+
+// ====== 设置 ======
+var THEMES = {
+  dark:  {bg:'#0a0e17', surface:'#131926', card:'#1a2235', border:'#1e2a45', text:'#e2e8f0', text2:'#8892a8', input:'#0d1321'},
+  light: {bg:'#f8fafc', surface:'#ffffff', card:'#ffffff', border:'#e2e8f0', text:'#1e293b', text2:'#64748b', input:'#f1f5f9'},
+  blue:  {bg:'#0f172a', surface:'#1e293b', card:'#334155', border:'#475569', text:'#e2e8f0', text2:'#94a3b8', input:'#1e293b'},
+  green: {bg:'#0d1f17', surface:'#15281f', card:'#1e3328', border:'#2a4a3a', text:'#e2e8f0', text2:'#88a896', input:'#15281f'}
+};
+
+function loadSettings() {
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem('app_settings') || '{}'); } catch(e) {}
+  var theme = saved.theme || 'dark';
+  document.getElementById('settingsBgTheme').value = theme;
+  if (theme === 'custom') {
+    document.getElementById('customBgGroup').style.display = '';
+    document.getElementById('settingsBgColor').value = saved.customBg || '#0a0e17';
+    document.getElementById('settingsBgColorText').value = saved.customBg || '#0a0e17';
+  }
+  var fabIcon = saved.fabIcon || '\u{1F4AC}';
+  document.querySelectorAll('.icon-option').forEach(function(btn){
+    btn.classList.toggle('active', btn.dataset.icon === fabIcon);
+  });
+  var chatTitle = saved.chatTitle || '智能体对话';
+  document.getElementById('settingsChatTitle').value = chatTitle;
+}
+
+function applyBgTheme(theme) {
+  if (theme === 'custom') {
+    document.getElementById('customBgGroup').style.display = '';
+    var cur = document.getElementById('settingsBgColor').value;
+    applyCustomBg(cur);
+    return;
+  }
+  document.getElementById('customBgGroup').style.display = 'none';
+  var t = THEMES[theme];
+  if (!t) return;
+  document.documentElement.style.setProperty('--bg', t.bg);
+  document.documentElement.style.setProperty('--surface', t.surface);
+  document.documentElement.style.setProperty('--card', t.card);
+  document.documentElement.style.setProperty('--border', t.border);
+  document.documentElement.style.setProperty('--text', t.text);
+  document.documentElement.style.setProperty('--text2', t.text2);
+  document.documentElement.style.setProperty('--input-bg', t.input);
+  saveSettings({theme: theme});
+}
+
+function applyCustomBg(color) {
+  document.documentElement.style.setProperty('--bg', color);
+  document.documentElement.style.setProperty('--surface', color);
+  document.documentElement.style.setProperty('--card', color);
+  document.getElementById('settingsBgTheme').value = 'custom';
+  document.getElementById('customBgGroup').style.display = '';
+  saveSettings({theme: 'custom', customBg: color});
+}
+
+function selectFabIcon(btn) {
+  document.querySelectorAll('.icon-option').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  var icon = btn.dataset.icon;
+  var fab = document.getElementById('fabBtn');
+  fab.innerHTML = icon + '<span class="badge"></span>';
+  saveSettings({fabIcon: icon});
+}
+
+function applyChatTitle() {
+  var title = document.getElementById('settingsChatTitle').value.trim() || '智能体对话';
+  document.querySelector('.chat-slider-header h3').innerHTML = title;
+  saveSettings({chatTitle: title});
+}
+
+function saveSettings(patch) {
+  var s = {};
+  try { s = JSON.parse(localStorage.getItem('app_settings') || '{}'); } catch(e) {}
+  for (var k in patch) s[k] = patch[k];
+  localStorage.setItem('app_settings', JSON.stringify(s));
+}
+
+function resetSettings() {
+  localStorage.removeItem('app_settings');
+  applyBgTheme('dark');
+  var fab = document.getElementById('fabBtn');
+  fab.innerHTML = '\u{1F4AC}<span class="badge"></span>';
+  document.querySelectorAll('.icon-option').forEach(function(b){ b.classList.remove('active'); });
+  document.querySelector('.icon-option[data-icon="\u{1F4AC}"]').classList.add('active');
+  document.getElementById('settingsChatTitle').value = '智能体对话';
+  document.querySelector('.chat-slider-header h3').innerHTML = '智能体对话';
+  document.getElementById('settingsBgTheme').value = 'dark';
+  document.getElementById('customBgGroup').style.display = 'none';
+}
+
+// ====== 密码管理（业界模式：bcrypt 哈希 + sessionStorage 会话级缓存）======
+// 前端会话级密码缓存：使用 sessionStorage，关闭标签页即失效，避免用户反复输入
+// 后端每次都用 bcrypt 验证，前端缓存仅是 UX 优化，不是安全机制
+const PWD_CACHE_KEY = 'system_pwd_verified';  // sessionStorage 缓存本次会话已验证的密码
+
+function getCachedPassword() {
+  try { return sessionStorage.getItem(PWD_CACHE_KEY) || ''; } catch(e) { return ''; }
+}
+function setCachedPassword(pwd) {
+  try { sessionStorage.setItem(PWD_CACHE_KEY, pwd); } catch(e) {}
+}
+function clearCachedPassword() {
+  try { sessionStorage.removeItem(PWD_CACHE_KEY); } catch(e) {}
+}
+
+// 设置面板：修改密码
+async function changePassword() {
+  var oldPwd = document.getElementById('oldPwd').value;
+  var newPwd = document.getElementById('newPwd').value;
+  var confirmPwd = document.getElementById('confirmPwd').value;
+  var msgEl = document.getElementById('pwdMsg');
+
+  if (!oldPwd || !newPwd || !confirmPwd) {
+    msgEl.style.color = '#f87171';
+    msgEl.textContent = '请填写所有字段';
+    return;
+  }
+  if (newPwd !== confirmPwd) {
+    msgEl.style.color = '#f87171';
+    msgEl.textContent = '两次输入的新密码不一致';
+    return;
+  }
+
+  try {
+    var r = await fetch(API + '/auth/change-password', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({old_password: oldPwd, new_password: newPwd, confirm_password: confirmPwd})
+    }).then(function(r){return r.json()});
+    if (r.status === 'ok') {
+      msgEl.style.color = '#10b981';
+      msgEl.textContent = '✅ ' + r.message;
+      document.getElementById('oldPwd').value = '';
+      document.getElementById('newPwd').value = '';
+      document.getElementById('confirmPwd').value = '';
+      // 密码已改，旧缓存失效
+      clearCachedPassword();
+    } else {
+      msgEl.style.color = '#f87171';
+      msgEl.textContent = '❌ ' + r.message;
+    }
+  } catch(e) {
+    msgEl.style.color = '#f87171';
+    msgEl.textContent = '❌ 请求失败: ' + e.message;
+  }
+}
+
+// 启动时检测是否为默认密码，是则强制弹窗
+async function checkDefaultPassword() {
+  try {
+    var r = await fetch(API + '/auth/status').then(function(r){return r.json()});
+    if (r.is_default) {
+      var dlg = document.getElementById('forceChangePwdDialog');
+      if (dlg && typeof dlg.showModal === 'function') {
+        dlg.showModal();
+      }
+    }
+  } catch(e) {
+    console.warn('[auth] 检查密码状态失败:', e);
+  }
+}
+
+// 强制修改密码弹窗
+async function forceChangePassword() {
+  var newPwd = document.getElementById('forceNewPwd').value;
+  var confirmPwd = document.getElementById('forceConfirmPwd').value;
+  var msgEl = document.getElementById('forcePwdMsg');
+
+  if (!newPwd || !confirmPwd) {
+    msgEl.textContent = '请填写所有字段';
+    return;
+  }
+  if (newPwd !== confirmPwd) {
+    msgEl.textContent = '两次输入的新密码不一致';
+    return;
+  }
+  if (newPwd.length < 6) {
+    msgEl.textContent = '新密码长度至少 6 位';
+    return;
+  }
+
+  // 用旧默认密码 123456 作为旧密码提交
+  try {
+    var r = await fetch(API + '/auth/change-password', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({old_password: '123456', new_password: newPwd, confirm_password: confirmPwd})
+    }).then(function(r){return r.json()});
+    if (r.status === 'ok') {
+      msgEl.style.color = '#10b981';
+      msgEl.textContent = '✅ 密码已修改';
+      setTimeout(function(){
+        document.getElementById('forceChangePwdDialog').close();
+        clearCachedPassword();
+      }, 800);
+    } else {
+      msgEl.style.color = '#f87171';
+      msgEl.textContent = '❌ ' + r.message;
+    }
+  } catch(e) {
+    msgEl.style.color = '#f87171';
+    msgEl.textContent = '❌ 请求失败: ' + e.message;
+  }
+}
+
+function skipForceChange() {
+  document.getElementById('forceChangePwdDialog').close();
+}
+
+// 重要操作前密码二次确认弹窗
+// 返回 Promise<password>，用户确认则 resolve 密码，取消则 reject
+let _verifyPwdResolver = null;
+function promptVerifyPassword(actionDesc) {
+  return new Promise(function(resolve, reject) {
+    var dlg = document.getElementById('verifyPwdDialog');
+    document.getElementById('verifyActionDesc').textContent = actionDesc || '请输入系统密码以继续';
+    document.getElementById('verifyPwdInput').value = '';
+    document.getElementById('verifyPwdMsg').textContent = '';
+    _verifyPwdResolver = {resolve: resolve, reject: reject};
+    if (typeof dlg.showModal === 'function') {
+      dlg.showModal();
+      setTimeout(function(){ document.getElementById('verifyPwdInput').focus(); }, 100);
+    } else {
+      // 浏览器不支持 <dialog>，回退到 prompt
+      var pwd = window.prompt(actionDesc || '请输入系统密码');
+      if (pwd) resolve(pwd); else reject(new Error('用户取消'));
+    }
+  });
+}
+
+function confirmVerifyPassword() {
+  var pwd = document.getElementById('verifyPwdInput').value;
+  var msgEl = document.getElementById('verifyPwdMsg');
+  if (!pwd) {
+    msgEl.textContent = '请输入密码';
+    return;
+  }
+  msgEl.textContent = '';
+  document.getElementById('verifyPwdDialog').close();
+  if (_verifyPwdResolver) {
+    _verifyPwdResolver.resolve(pwd);
+    _verifyPwdResolver = null;
+  }
+}
+
+function cancelVerifyPassword() {
+  document.getElementById('verifyPwdDialog').close();
+  if (_verifyPwdResolver) {
+    _verifyPwdResolver.reject(new Error('用户取消'));
+    _verifyPwdResolver = null;
+  }
+}
+
+// 切换"忘记密码"重置指引的显示
+function toggleResetGuide() {
+  var el = document.getElementById('resetGuide');
+  if (el) el.style.display = (el.style.display === 'none' ? 'block' : 'none');
+}
+
+// 获取密码（优先用 sessionStorage 缓存，否则弹框询问 + 后端校验 + 重试）
+// 业界做法：sudo / 浏览器主密码 / 任何二次确认流程
+//   1. 密码错误 → 不缓存，允许重试（最多 3 次，防止无脑爆破）
+//   2. 密码正确 → 缓存到 sessionStorage，避免后续重复输入
+//   3. 用户取消 → 不缓存，下次仍弹框
+//   4. 已有缓存 → 直接返回，不再弹框（用户体验）
+// 这样调 用方拿到的密码保证是后端校验通过的，避免"缓存了错密码"的 bug
+async function getVerifiedPassword(actionDesc) {
+  var cached = getCachedPassword();
+  if (cached) return cached;
+
+  var MAX_RETRY = 3;  // 最多重试 3 次（含首次），防止暴力试密码
+  var lastErr = "";
+  for (var i = 0; i < MAX_RETRY; i++) {
+    var desc = actionDesc || '请输入系统密码以继续';
+    if (i > 0) {
+      desc = '密码错误，还可尝试 ' + (MAX_RETRY - i) + ' 次。\n\n' + actionDesc;
+    }
+    var pwd;
+    try {
+      pwd = await promptVerifyPassword(desc);
+    } catch (e) {
+      // 用户点取消 → 不缓存，直接抛出让调 用方处理
+      throw e;
+    }
+    // 调后端校验密码
+    var verifyResp = await fetch(API + '/auth/verify', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({password: pwd, action: actionDesc || ''})
+    }).then(function(r){return r.json();}).catch(function(){return {status:'error', message:'网络错误'};});
+    if (verifyResp.status === 'ok') {
+      // 校验通过 → 缓存
+      setCachedPassword(pwd);
+      return pwd;
+    } else {
+      lastErr = verifyResp.message || '密码错误';
+      // 继续下一轮循环，重新弹框
+    }
+  }
+  // 超过重试次数
+  throw new Error('密码错误次数过多，已取消操作');
+}
+
+// 启动时恢复设置
+// 注意：fabBtn 在本 <script> 标签之后才定义（行944），需等 DOM 加载完成后再访问
+document.addEventListener('DOMContentLoaded', function restoreSettings(){
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem('app_settings') || '{}'); } catch(e) {}
+  if (saved.theme === 'custom' && saved.customBg) {
+    applyCustomBg(saved.customBg);
+  } else if (saved.theme && THEMES[saved.theme]) {
+    applyBgTheme(saved.theme);
+  }
+  if (saved.fabIcon) {
+    var fab = document.getElementById('fabBtn');
+    if (fab) fab.innerHTML = saved.fabIcon + '<span class="badge"></span>';
+  }
+  if (saved.chatTitle) {
+    var h3 = document.querySelector('.chat-slider-header h3');
+    if (h3) h3.innerHTML = saved.chatTitle;
+  }
+  // 启动时检查是否仍为默认密码，是则弹窗强制修改
+  checkDefaultPassword();
+});
+
+function show(el, html, type) {
+  el.innerHTML = html;
+  el.className = "output show " + (type||"info");
+  el.style.display = "block";
+}
+function fmtNum(n) { return n != null ? n : 0; }
+
+// ====== 操作面板 ======
+async function loadOverview() {
+  const d = await fetch(API + "/overview").then(r => r.json()).catch(() => ({}));
+  document.getElementById("overviewStats").innerHTML = [
+    {l:"策略数量", v:fmtNum(d.strategies_count), c:"var(--primary)"},
+    {l:"执行总次数", v:fmtNum(d.total_executions), c:"var(--text)"},
+    {l:"成功", v:fmtNum(d.succeeded), c:"var(--success)"},
+    {l:"失败", v:fmtNum(d.failed), c:"var(--danger)"},
+    {l:"日志总量", v:fmtNum(d.log_stats?.total||0), c:"var(--text2)"},
+  ].map(s => `<div class="stat-box"><div class="stat-label">${s.l}</div><div class="stat-val" style="color:${s.c}">${s.v}</div></div>`).join("");
+}
+
+// ====== 智能体对话 ======
+let chatHistory = [];
+// 键盘事件：Enter 发送，Shift+Enter 换行（业界共识：Slack/Discord/微信网页版都这么干）
+function onChatKeydown(event) {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();  // 阻止 textarea 默认换行
+    sendChat();
+  }
+  // Shift+Enter 不拦截，textarea 自然换行
+  // Ctrl/Cmd+Enter 也发送（兼容习惯）
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    sendChat();
+  }
+}
+
+// 展开/收起输入框（点击按钮在"单行紧凑"和"多行展开"间切换）
+// 业界做法：ChatGPT 输入框右下角的展开按钮
+function toggleChatInputExpand() {
+  var ta = document.getElementById('chatInput');
+  var btn = document.getElementById('chatInputToggleBtn');
+  if (!ta || !btn) return;
+  var expanded = ta.classList.toggle('expanded');
+  if (expanded) {
+    ta.style.minHeight = '120px';
+    btn.innerHTML = '&#x2B13;';  // 收起图标
+    btn.title = '收起输入框';
+  } else {
+    ta.style.minHeight = '';
+    btn.innerHTML = '&#x2B12;';  // 展开图标
+    btn.title = '展开输入框';
+  }
+  ta.focus();
+}
+
+async function sendChat() {
+  const input = document.getElementById("chatInput");
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = "";
+
+  addChatMsg("user", msg);
+  chatHistory.push({role:"user", content:msg});
+
+  const box = document.getElementById("chatBox");
+  const loading = document.createElement("div");
+  loading.className = "chat-loading";
+  loading.textContent = "思考中";
+  box.appendChild(loading);
+  box.scrollTop = box.scrollHeight;
+
+  try {
+    const r = await fetch(API + "/chat", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({message:msg, history:chatHistory.slice(-10)})
+    }).then(r => r.json());
+
+    console.log("[sendChat] /chat 响应:", r);
+    console.log("[sendChat] reply:", r.reply);
+    console.log("[sendChat] actions:", r.actions);
+
+    loading.remove();
+    addChatMsg("assistant", r.reply);
+    chatHistory.push({role:"assistant", content:r.reply});
+
+    if (r.actions && r.actions.length > 0) {
+      for (const action of r.actions) {
+        addChatMsg("system", `正在执行: ${action.action}...`);
+        // 加超时控制，避免请求无限等待（密码弹框需要更长超时）
+        const controller = new AbortController();
+        const timeoutId = setTimeout(function(){ controller.abort(); }, 60000);
+        try {
+          const resp = await fetch(API + "/chat/execute-action", {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify(action),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          const result = await resp.json();
+          console.log("[execute-action] 响应:", result);
+          if (result.status === "ok") {
+            addChatMsg("system", "✅ " + result.message);
+            // 策略变更后自动刷新列表
+            if (typeof loadStrategies === "function" && (action.action === "add_strategy" || action.action === "delete_strategy")) {
+              loadStrategies();
+            }
+          } else if (result.status === "confirmation_required" || result.status === "password_required") {
+            // 重要操作：弹密码框作为二次确认（密码输入 = 确认执行）
+            try {
+              const pwd = await getVerifiedPassword("⚠️ " + result.message + "\n\n操作: " + (action.action || ""));
+              // 用密码 + confirmed=true 重新执行
+              const r2 = await fetch(API + "/chat/execute-action", {
+                method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body: JSON.stringify(Object.assign({confirmed: true, password: pwd}, action))
+              }).then(r => r.json());
+              if (r2.status === "ok") {
+                addChatMsg("system", "✅ " + r2.message);
+                if (typeof loadStrategies === "function" && (action.action === "add_strategy" || action.action === "delete_strategy")) {
+                  loadStrategies();
+                }
+              } else if (r2.status === "password_wrong" || r2.status === "password_required") {
+                // 兜底：缓存被清除或并发场景下密码失效，清缓存后让用户重新输入
+                clearCachedPassword();
+                addChatMsg("system", "❌ 密码已失效，请重新尝试该操作");
+              } else {
+                addChatMsg("system", "❌ " + (r2.message || "执行失败"));
+              }
+            } catch(e) {
+              if (e.message === '用户取消') {
+                addChatMsg("system", "已取消操作");
+              } else {
+                addChatMsg("system", "❌ " + e.message);
+              }
+            }
+          } else {
+            addChatMsg("system", "❌ " + (result.message || "执行失败"));
+          }
+        } catch(err) {
+          clearTimeout(timeoutId);
+          if (err.name === "AbortError") {
+            addChatMsg("system", "❌ 请求超时（60秒），请检查后端服务");
+          } else {
+            addChatMsg("system", "❌ 请求失败: " + err.message);
+          }
+        }
+      }
+    }
+  } catch(e) {
+    loading.remove();
+    addChatMsg("assistant", "连接失败，请确认服务运行中");
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+function addChatMsg(role, content) {
+  const box = document.getElementById("chatBox");
+  const div = document.createElement("div");
+  div.className = "msg " + role;
+  div.innerHTML = content.replace(/\n/g, "<br>");
+  const time = document.createElement("div");
+  time.className = "time";
+  time.textContent = new Date().toLocaleTimeString("zh-CN");
+  div.appendChild(time);
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+// 显示确认/取消按钮（用于 permission=ask 的高危操作二次确认）
+function addConfirmPrompt(action, message) {
+  const box = document.getElementById("chatBox");
+  const div = document.createElement("div");
+  div.className = "msg system";
+  div.style.maxWidth = "85%";
+  div.innerHTML = "⚠️ " + (message || "该操作需要确认") + "<br><br>";
+
+  const btnYes = document.createElement("button");
+  btnYes.className = "btn btn-success btn-sm";
+  btnYes.textContent = "✓ 确认执行";
+  btnYes.style.marginRight = "8px";
+  btnYes.onclick = function() {
+    div.remove();
+    executeConfirmedAction(action);
+  };
+
+  const btnNo = document.createElement("button");
+  btnNo.className = "btn btn-ghost btn-sm";
+  btnNo.textContent = "✗ 取消";
+  btnNo.onclick = function() {
+    div.innerHTML = "已取消操作：" + (action.action || "");
+    addChatMsg("system", "用户已取消操作");
+  };
+
+  div.appendChild(btnYes);
+  div.appendChild(btnNo);
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+// 带 confirmed=true 重新调用 execute-action
+async function executeConfirmedAction(action) {
+  const box = document.getElementById("chatBox");
+  addChatMsg("system", "正在执行（已确认）: " + (action.action || "") + "...");
+  try {
+    const result = await fetch(API + "/chat/execute-action", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(Object.assign({confirmed: true}, action))
+    }).then(r => r.json());
+    if (result.status === "ok") {
+      addChatMsg("system", "✅ " + result.message);
+      // 策略变更后自动刷新列表
+      if (typeof loadStrategies === "function" && (action.action === "add_strategy" || action.action === "delete_strategy")) {
+        loadStrategies();
+      }
+    } else {
+      addChatMsg("system", "❌ " + (result.message || "执行失败"));
+    }
+  } catch(e) {
+    addChatMsg("system", "❌ 请求失败: " + e.message);
+  }
+  box.scrollTop = box.scrollHeight;
+}
+function clearChat() {
+  document.getElementById("chatBox").innerHTML = '<div class="msg assistant">你好！有什么可以帮助你的？</div>';
+  chatHistory = [];
+}
+
+// ====== 策略编排 ======
+async function doExecute() {
+  const body = {
+    source_ip: document.getElementById("srcIp").value,
+    dest_ip: document.getElementById("dstIp").value,
+    protocol: document.getElementById("protocol").value,
+    port: parseInt(document.getElementById("port").value)||0,
+    content: document.getElementById("content").value
+  };
+  const r = await fetch(API + "/execute", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)}).then(r => r.json());
+  const agentNames = {security_agent:"安全审查Agent", policy_agent:"策略分析Agent", monitor_agent:"监控Agent"};
+  const actionNames = {audit:"安全审计", compliance_check:"合规检查", analyze:"策略分析", health_check:"健康检查", analyze_anomaly:"异常分析"};
+  let html = `<div style="margin-bottom:8px;font-size:15px">匹配到 <b>${r.matched_strategies?.length||0}</b> 条策略</div>`;
+  html += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${(r.matched_strategies||[]).map(s => `<span class="tag tag-info">${s}</span>`).join("")}</div>`;
+  html += "<table><thead><tr><th>步骤</th><th>Agent</th><th>操作</th><th>状态</th></tr></thead><tbody>";
+  (r.steps||[]).forEach(s => {
+    html += `<tr><td>${s.step_id}</td><td>${agentNames[s.agent]||s.agent}</td><td>${actionNames[s.action]||s.action}</td><td><span class="tag tag-success">已分发</span></td></tr>`;
+  });
+  html += "</tbody></table>";
+  html += `<div style="font-size:11px;color:var(--text2);margin-top:6px">执行ID: ${r.execution_id}</div>`;
+  show(document.getElementById("executeOutput"), html, "success");
+}
+
+// ====== 策略管理 ======
+async function loadStrategies() {
+  const data = await fetch(API + "/strategies").then(r => r.json());
+  const el = document.getElementById("strategyList");
+  if (!data || data.length === 0) { el.innerHTML = '<div class="empty">暂无策略</div>'; return; }
+  let html = "<table><thead><tr><th>ID</th><th>名称</th><th>优先级</th><th>触发条件</th><th>步骤</th><th>状态</th></tr></thead><tbody>";
+  data.forEach(s => {
+    html += `<tr><td>${s.strategy_id}</td><td>${s.name}</td><td>${s.priority}</td><td>${(s.triggers||[]).length}</td><td>${(s.steps||[]).length}</td><td><span class="tag ${s.enabled?'tag-success':'tag-warning'}">${s.enabled?"已启用":"已禁用"}</span></td></tr>`;
+  });
+  html += "</tbody></table>";
+  el.innerHTML = html;
+}
+
+// ====== 回收站 ======
+async function loadTrash() {
+  const dialog = document.getElementById('trashDialog');
+  const listEl = document.getElementById('trashList');
+  listEl.innerHTML = '<div class="empty" style="padding:20px">加载中...</div>';
+  if (!dialog.open) dialog.showModal();
+
+  try {
+    const data = await fetch(API + '/strategies/trash').then(r => r.json());
+    const trash = data.trash || [];
+    if (trash.length === 0) {
+      listEl.innerHTML = '<div class="empty" style="padding:32px">回收站为空<br><span style="font-size:11px">删除的策略会保留 30 天，期间可恢复</span></div>';
+      return;
+    }
+
+    let html = '<table><thead><tr><th>ID</th><th>名称</th><th>剩余保留</th><th>操作</th></tr></thead><tbody>';
+    trash.forEach(t => {
+      const days = t.days_left;
+      const urgent = days <= 3;
+      const warn = days <= 7 && days > 3;
+      const dayColor = urgent ? 'var(--danger)' : (warn ? 'var(--warning)' : 'var(--text2)');
+      const dayLabel = days > 0 ? `${days.toFixed(1)} 天` : '即将清理';
+      html += `<tr>
+        <td style="font-family:monospace">${t.strategy_id}</td>
+        <td>${t.name}</td>
+        <td><span style="color:${dayColor};font-weight:500">${dayLabel}</span></td>
+        <td>
+          <button class="btn btn-sm btn-success" onclick="restoreStrategy('${t.strategy_id}')">恢复</button>
+          <button class="btn btn-sm btn-danger" onclick="purgeStrategy('${t.strategy_id}')">永久删除</button>
+        </td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    listEl.innerHTML = html;
+  } catch (e) {
+    listEl.innerHTML = '<div class="empty" style="padding:20px;color:var(--danger)">加载失败: ' + e.message + '</div>';
+  }
+}
+
+async function restoreStrategy(strategyId) {
+  // 先尝试原 ID 恢复
+  let r = await fetch(`${API}/strategies/${encodeURIComponent(strategyId)}/restore`, {method:'POST'}).then(r => r.json());
+
+  if (r.action === 'id_conflict') {
+    // ID 冲突，让用户输入新 ID
+    const newId = prompt(`原 ID "${strategyId}" 已被新策略占用。\n\n请输入一个新的策略 ID 来恢复（留空取消）：`, strategyId + '_restored');
+    if (!newId) return;
+    r = await fetch(`${API}/strategies/${encodeURIComponent(strategyId)}/restore?new_id=${encodeURIComponent(newId)}`, {method:'POST'}).then(r => r.json());
+  }
+
+  if (r.status === 'ok') {
+    alert('恢复成功：' + r.message);
+    loadTrash();
+    loadStrategies();
+  } else {
+    alert('恢复失败：' + (r.message || '未知错误'));
+  }
+}
+
+async function purgeStrategy(strategyId) {
+  if (!confirm(`确定要永久删除策略 "${strategyId}" 吗？\n\n此操作不可恢复！`)) return;
+  const r = await fetch(`${API}/strategies/trash/${encodeURIComponent(strategyId)}`, {method:'DELETE'}).then(r => r.json());
+  if (r.status === 'ok') {
+    alert('已永久删除');
+    loadTrash();
+  } else {
+    alert('失败：' + (r.message || '未知错误'));
+  }
+}
+function addTrigger() {
+  const d = document.createElement("div"); d.className = "dynamic-row";
+  d.innerHTML = '<div class="form-group"><select class="t-field"><option value="source_ip">源IP</option><option value="dest_ip">目标IP</option><option value="protocol">协议</option><option value="port">端口</option></select></div><div class="form-group"><select class="t-op"><option value="eq">等于</option><option value="ne">不等于</option><option value="gt">大于</option><option value="lt">小于</option><option value="in">属于</option><option value="contains">包含</option><option value="regex">正则</option><option value="exists">存在</option></select></div><div class="form-group"><input class="t-val" placeholder="值"></div><button class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">✖</button>';
+  document.getElementById("triggerList").appendChild(d);
+}
+function addStep() {
+  const d = document.createElement("div"); d.className = "dynamic-row";
+  d.innerHTML = '<div class="form-group"><input class="s-id" placeholder="步骤ID"></div><div class="form-group"><select class="s-agent"><option value="security_agent">安全审查Agent</option><option value="policy_agent">策略分析Agent</option><option value="monitor_agent">监控Agent</option></select></div><div class="form-group"><select class="s-action"><option value="audit">安全审计</option><option value="compliance_check">合规检查</option><option value="analyze">策略分析</option><option value="health_check">健康检查</option><option value="analyze_anomaly">异常分析</option></select></div><button class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">✖</button>';
+  document.getElementById("stepList").appendChild(d);
+}
+async function doAddStrategy() {
+  const triggers = Array.from(document.querySelectorAll("#triggerList .dynamic-row")).map(r => ({field: r.querySelector(".t-field").value, operator: r.querySelector(".t-op").value, value: r.querySelector(".t-val").value}));
+  const steps = Array.from(document.querySelectorAll("#stepList .dynamic-row")).map(r => ({step_id: r.querySelector(".s-id").value, agent: r.querySelector(".s-agent").value, action: r.querySelector(".s-action").value, params: {}, timeout: 30}));
+  const body = {id: document.getElementById("sId").value, name: document.getElementById("sName").value, enabled: true, priority: parseInt(document.getElementById("sPriority").value)||100, triggers, steps};
+  if (!body.id || !body.name) { show(document.getElementById("strategyOutput"), "策略ID和名称不能为空", "error"); return; }
+  const r = await fetch(API + "/strategies", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)}).then(r => r.json());
+  show(document.getElementById("strategyOutput"), "策略 \"" + body.name + "\" 已成功添加", "success");
+  loadStrategies();
+}
+
+// ====== 模型预设 ======
+// 所有预定义厂商都遵循 OpenAI 兼容协议（/v1/chat/completions 格式）
+// 用户没找到自己的厂商时，选「自定义」按 OpenAI 兼容格式手动填写
+function presetModel(provider) {
+  var presets = {
+    // ===== 国内 =====
+    deepseek: {id:'deepseek-chat', name:'DeepSeek Chat',provider:'deepseek',api_base:'https://api.deepseek.com/v1',api_key:'',max_tokens:4096,temp:0.7},
+    qwen: {id:'qwen-max', name:'通义千问',provider:'qwen',api_base:'https://dashscope.aliyuncs.com/compatible-mode/v1',api_key:'',max_tokens:4096,temp:0.7},
+    glm: {id:'glm-4', name:'智谱 GLM-4',provider:'glm',api_base:'https://open.bigmodel.cn/api/paas/v4',api_key:'',max_tokens:4096,temp:0.7},
+    kimi: {id:'moonshot-v1-8k', name:'Moonshot Kimi',provider:'kimi',api_base:'https://api.moonshot.cn/v1',api_key:'',max_tokens:8192,temp:0.7},
+    doubao: {id:'doubao-pro-32k', name:'字节豆包',provider:'doubao',api_base:'https://ark.cn-beijing.volces.com/api/v3',api_key:'',max_tokens:4096,temp:0.7},
+    baichuan: {id:'Baichuan4', name:'百川 Baichuan4',provider:'baichuan',api_base:'https://api.baichuan-ai.com/v1',api_key:'',max_tokens:4096,temp:0.7},
+    minimax: {id:'abab6.5-chat', name:'MiniMax abab6.5',provider:'minimax',api_base:'https://api.minimax.chat/v1',api_key:'',max_tokens:4096,temp:0.7},
+    yi: {id:'yi-large', name:'零一 Yi-Large',provider:'yi',api_base:'https://api.lingyiwanwu.com/v1',api_key:'',max_tokens:4096,temp:0.7},
+    hunyuan: {id:'hunyuan-pro', name:'腾讯混元',provider:'hunyuan',api_base:'https://api.hunyuan.cloud.tencent.com/v1',api_key:'',max_tokens:4096,temp:0.7},
+    spark: {id:'Spark32', name:'讯飞星火',provider:'spark',api_base:'https://spark-api-open.xf-yun.com/v1',api_key:'',max_tokens:4096,temp:0.7},
+    // ===== 海外 =====
+    openai: {id:'gpt-4o-mini', name:'GPT-4o Mini',provider:'openai',api_base:'https://api.openai.com/v1',api_key:'',max_tokens:4096,temp:0.7},
+    claude: {id:'claude-3-5-sonnet-20241022', name:'Claude 3.5 Sonnet',provider:'claude',api_base:'https://api.anthropic.com/v1',api_key:'',max_tokens:4096,temp:0.7},
+    gemini: {id:'gemini-1.5-flash', name:'Gemini 1.5 Flash',provider:'gemini',api_base:'https://generativelanguage.googleapis.com/v1beta/openai',api_key:'',max_tokens:4096,temp:0.7},
+    grok: {id:'grok-2', name:'xAI Grok-2',provider:'grok',api_base:'https://api.x.ai/v1',api_key:'',max_tokens:4096,temp:0.7},
+    mistral: {id:'mistral-small-latest', name:'Mistral Small',provider:'mistral',api_base:'https://api.mistral.ai/v1',api_key:'',max_tokens:4096,temp:0.7},
+    // ===== 免费 / 本地 / 聚合 =====
+    groq: {id:'llama-3.1-70b-versatile', name:'Llama 3.1 70B (Groq免费)',provider:'groq',api_base:'https://api.groq.com/openai/v1',api_key:'',max_tokens:8192,temp:0.7},
+    ollama: {id:'llama3', name:'Llama 3 (本地)',provider:'ollama',api_base:'http://localhost:11434/v1',api_key:'ollama',max_tokens:4096,temp:0.7},
+    siliconflow: {id:'deepseek-ai/DeepSeek-V3', name:'DeepSeek-V3 (硅基流动)',provider:'siliconflow',api_base:'https://api.siliconflow.cn/v1',api_key:'',max_tokens:4096,temp:0.7},
+    openrouter: {id:'openai/gpt-4o-mini', name:'GPT-4o Mini (OpenRouter)',provider:'openrouter',api_base:'https://openrouter.ai/api/v1',api_key:'',max_tokens:4096,temp:0.7}
+  };
+  var p = presets[provider] || presets.deepseek;
+  document.getElementById('mId').value = p.id;
+  document.getElementById('mName').value = p.name;
+  document.getElementById('mProvider').value = p.provider;
+  document.getElementById('mApiBase').value = p.api_base;
+  document.getElementById('mApiKey').value = p.api_key;
+  document.getElementById('mMaxTokens').value = p.max_tokens;
+  document.getElementById('mTemp').value = p.temp;
+  document.getElementById('mModel').value = p.id;
+  // 清掉自定义模式的提示
+  var hint = document.getElementById('customHint');
+  if (hint) hint.style.display = 'none';
+}
+
+// 切换提供商下拉时，自动加载对应预设（custom 除外，custom 让用户自己填）
+function onProviderChanged() {
+  var provider = document.getElementById('mProvider').value;
+  var hint = document.getElementById('customHint');
+  if (provider === 'custom') {
+    // 自定义模式：清空字段并显示提示
+    document.getElementById('mId').value = '';
+    document.getElementById('mName').value = '';
+    document.getElementById('mModel').value = '';
+    document.getElementById('mApiBase').value = '';
+    document.getElementById('mApiKey').value = '';
+    document.getElementById('mMaxTokens').value = 4096;
+    document.getElementById('mTemp').value = 0.7;
+    if (hint) hint.style.display = 'block';
+  } else {
+    presetModel(provider);
+  }
+}
+// ====== 检测所有模型 ======
+async function testAllModels() {
+  var list = document.getElementById("modelList");
+  list.innerHTML = '<div class="empty">正在检测...</div>';
+  try {
+    var results = await fetch(API + "/models/test-all", {method:"POST"}).then(function(r){return r.json()});
+    var html = "<table><thead><tr><th>名称</th><th>状态</th><th>延迟</th></tr></thead><tbody>";
+    results.forEach(function(r) {
+      var ok = r.test && r.test.status === "ok";
+      html += "<tr><td>" + r.name + "</td><td><span class=\"tag " + (ok ? "tag-success" : "tag-danger") + "\">" + (ok ? "正常" : "失败") + "</span></td><td>" + (r.test && r.test.latency ? r.test.latency + "s" : r.test && r.test.message ? r.test.message.slice(0,30) : "-") + "</td></tr>";
+    });
+    html += "</tbody></table>";
+    list.innerHTML = html;
+  } catch(e) {
+    list.innerHTML = '<div class="empty">检测失败: ' + e.message + '</div>';
+  }
+}
+// ====== 模型配置 ======
+// 缓存最近一次加载的模型列表，供主模型切换时刷新监视下拉使用
+var _cachedModels = [];
+var _cachedSettings = {primary_model_id: null, verifier_model_id: null};
+async function loadModels() {
+  const data = await fetch(API + "/models").then(r => r.json()).catch(() => []);
+  _cachedModels = data || [];
+  // 同步取 settings，用于动态计算每个模型的当前角色（主/监视/主+监/未使用）
+  try {
+    _cachedSettings = await fetch(API + "/settings").then(r => r.json());
+  } catch(e) { /* keep defaults */ }
+  const el = document.getElementById("modelList");
+  if (!data || data.length === 0) { el.innerHTML = '<div class="empty">暂无模型配置</div>'; refreshPrimaryModelSelect([]); refreshVerifierModelSelect([]); return; }
+  let html = "<table><thead><tr><th>名称</th><th>当前角色</th><th>提供商</th><th>模型</th><th>API地址</th><th>启用</th><th>操作</th></tr></thead><tbody>";
+  const primaryId = _cachedSettings.primary_model_id;
+  const verifierId = _cachedSettings.verifier_model_id;
+  data.forEach(m => {
+    var enabled = m.api_key && m.enabled;
+    var hasKey = !!m.api_key;
+    // 角色标签：从 settings 动态计算（模型本身不再带 role 字段）
+    // 业界模式：role 是"被怎么用"，由 settings 决定，不由模型本身决定
+    var isPrimary = m.id === primaryId;
+    var isVerifier = m.id === verifierId;
+    var roleTag = isPrimary && isVerifier ? '<span class="tag tag-info">主+监</span>'
+                : isPrimary ? '<span class="tag tag-success">主</span>'
+                : isVerifier ? '<span class="tag tag-purple">监视</span>'
+                : '<span class="tag" style="background:rgba(136,146,168,.15);color:var(--text2)">未使用</span>';
+    // 启用开关：未填 API Key 时禁用
+    var toggle = hasKey
+      ? `<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" ${m.enabled ? 'checked' : ''} onchange="toggleModel('${m.id}')" style="cursor:pointer"><span style="font-size:11px;color:var(--text2)">${m.enabled ? '启用' : '禁用'}</span></label>`
+      : '<span class="tag tag-warning">未配置Key</span>';
+    // 操作：测试连接 + 删除
+    var actions = `<button class="btn btn-sm btn-ghost" onclick="testSavedModel('${m.id}', this)">测试</button> <button class="btn btn-sm btn-danger" onclick="deleteModel('${m.id}')">删除</button>`;
+    html += `<tr><td>${m.name}</td><td>${roleTag}</td><td>${m.provider}</td><td>${m.id}</td><td style="font-size:11px;color:var(--text2)">${m.api_base}</td><td>${toggle}</td><td>${actions}</td></tr>`;
+  });
+  html += "</tbody></table>";
+  el.innerHTML = html;
+  // 同步刷新设置面板的主模型下拉与监视模型下拉
+  refreshPrimaryModelSelect(data);
+  refreshVerifierModelSelect(data);
+}
+
+// 刷新设置面板的主模型下拉（显示所有已启用且有 api_key 的模型，不限 role）
+function refreshPrimaryModelSelect(models) {
+  var sel = document.getElementById('primaryModelSelect');
+  if (!sel) return;
+  var primaryModels = (models || []).filter(function(m){
+    return m.api_key && m.enabled;
+  });
+  var currentVal = sel.value;
+  if (primaryModels.length === 0) {
+    sel.innerHTML = '<option value="">-- 请先在模型管理添加模型 --</option>';
+    return;
+  }
+  var html = '<option value="">-- 默认（取第一个启用模型）--</option>';
+  primaryModels.forEach(function(m){
+    var role = m.role || "primary";
+    var tag = role === "verifier" ? "[监视] " : role === "both" ? "[主+监] " : "";
+    html += `<option value="${m.id}">${tag}${m.name}（${m.model}）</option>`;
+  });
+  sel.innerHTML = html;
+  // 恢复选中值（优先用 loadVerifySettings 标记的 targetId，其次当前值）
+  var targetId = sel.dataset.targetId || currentVal;
+  if (targetId && Array.from(sel.options).some(function(o){return o.value === targetId;})) {
+    sel.value = targetId;
+  }
+}
+
+// 刷新设置面板的监视模型下拉（显示所有启用且有 api_key 的模型，自动排除当前已选主模型）
+// 说明：role 字段仅作信息标签，不再做硬过滤 —— 用户可自由选任意模型当主/监视
+function refreshVerifierModelSelect(models) {
+  var sel = document.getElementById('verifierModelSelect');
+  if (!sel) return;
+  var primarySel = document.getElementById('primaryModelSelect');
+  var currentPrimaryId = primarySel ? primarySel.value : "";
+  var allModels = (models || []).filter(function(m){
+    return m.api_key && m.enabled;
+  });
+  var currentVal = sel.value;
+  if (allModels.length === 0) {
+    sel.innerHTML = '<option value="">-- 请先在模型管理添加模型 --</option>';
+    return;
+  }
+  var html = '<option value="">-- 不使用监视模型 --</option>';
+  allModels.forEach(function(m){
+    // 排除当前已选作主模型的同一条配置（避免主、监视完全相同，自我审查无意义）
+    if (m.id === currentPrimaryId) return;
+    var role = m.role || "primary";
+    var tag = role === "verifier" ? "[监视] " : role === "both" ? "[主+监] " : "";
+    html += `<option value="${m.id}">${tag}${m.name}（${m.model}）</option>`;
+  });
+  sel.innerHTML = html;
+  // 尝试恢复选中值（优先用 loadVerifySettings 标记的 targetId）
+  var targetId = sel.dataset.targetId || currentVal;
+  if (targetId && Array.from(sel.options).some(function(o){return o.value === targetId;})) {
+    sel.value = targetId;
+  }
+}
+
+// 主模型切换时：刷新监视下拉（排除新主模型），再保存设置
+function onPrimaryModelChanged() {
+  refreshVerifierModelSelect(_cachedModels);
+  saveVerifySettings();
+}
+
+// 加载监视设置（页面初始化时调用）
+async function loadVerifySettings() {
+  try {
+    var s = await fetch(API + "/settings").then(function(r){return r.json();});
+    if (s.verify_strength) {
+      var sel = document.getElementById('verifyStrengthSelect');
+      if (sel) sel.value = s.verify_strength;
+    }
+    if (s.verifier_model_id) {
+      // 需等 loadModels 后才有 options，这里先标记，由 refreshVerifierModelSelect 处理
+      var sel = document.getElementById('verifierModelSelect');
+      if (sel) sel.dataset.targetId = s.verifier_model_id;
+    }
+    if (s.primary_model_id) {
+      // 同上，由 refreshPrimaryModelSelect 处理
+      var pSel = document.getElementById('primaryModelSelect');
+      if (pSel) pSel.dataset.targetId = s.primary_model_id;
+    }
+    // 主模型值恢复后，刷新监视下拉以排除当前主模型
+    // （loadModels 是异步的，可能比本函数更晚完成；这里 setTimeout 让其先跑完再刷新）
+    setTimeout(function(){
+      refreshPrimaryModelSelect(_cachedModels);
+      refreshVerifierModelSelect(_cachedModels);
+    }, 300);
+  } catch(e) { console.warn("加载监视设置失败", e); }
+}
+
+// 保存监视设置（含主模型选择）
+async function saveVerifySettings() {
+  var strength = document.getElementById('verifyStrengthSelect').value;
+  var modelId = document.getElementById('verifierModelSelect').value || null;
+  var primaryId = document.getElementById('primaryModelSelect').value || null;
+  try {
+    var r = await fetch(API + "/settings", {
+      method: "PUT",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        verify_strength: strength,
+        verifier_model_id: modelId,
+        primary_model_id: primaryId
+      })
+    }).then(function(r){return r.json();});
+    var msgEl = document.getElementById('verifySettingsMsg');
+    if (r.status === "ok") {
+      msgEl.style.color = "var(--success)";
+      msgEl.textContent = "✓ 监视设置已保存";
+      setTimeout(function(){ msgEl.textContent = ""; }, 2000);
+      // 刷新模型列表的"当前角色"标签（主/监视/未使用 会跟着变化）
+      loadModels();
+    } else {
+      msgEl.style.color = "var(--danger)";
+      msgEl.textContent = "❌ " + (r.message || "保存失败");
+    }
+  } catch(e) {
+    var msgEl = document.getElementById('verifySettingsMsg');
+    msgEl.style.color = "var(--danger)";
+    msgEl.textContent = "❌ 请求失败: " + e.message;
+  }
+}
+async function toggleModel(id) {
+  try {
+    var r = await fetch(API + "/models/" + id + "/toggle", {method:"PATCH"}).then(function(r){return r.json()});
+    if (r.status === "ok") {
+      loadModels();
+    } else {
+      alert(r.message || "操作失败");
+    }
+  } catch(e) {
+    alert("请求失败: " + e.message);
+  }
+}
+async function testSavedModel(id, btn) {
+  var original = btn.textContent;
+  btn.textContent = "测试中...";
+  btn.disabled = true;
+  try {
+    var r = await fetch(API + "/models/test/" + id, {method:"POST"}).then(function(r){return r.json()});
+    if (r.status === "ok") {
+      btn.textContent = "✓ 正常";
+      btn.style.color = "var(--success)";
+    } else {
+      btn.textContent = "✗ 失败";
+      btn.style.color = "var(--danger)";
+      alert("连接失败: " + (r.message || "未知错误"));
+    }
+  } catch(e) {
+    btn.textContent = "✗ 失败";
+    btn.style.color = "var(--danger)";
+    alert("请求失败: " + e.message);
+  }
+  setTimeout(function(){
+    btn.textContent = original;
+    btn.style.color = "";
+    btn.disabled = false;
+  }, 2500);
+}
+async function testModel() {
+  var body = {
+    id: document.getElementById("mId").value,
+    name: document.getElementById("mName").value,
+    provider: document.getElementById("mProvider").value,
+    api_base: document.getElementById("mApiBase").value,
+    api_key: document.getElementById("mApiKey").value,
+    model: document.getElementById("mModel").value,
+    max_tokens: parseInt(document.getElementById("mMaxTokens").value) || 4096,
+    temperature: parseFloat(document.getElementById("mTemp").value) || 0.7,
+    enabled: true
+  };
+  if (!body.api_key) { show(document.getElementById("modelOutput"), "请先填写 API Key", "error"); return; }
+  show(document.getElementById("modelOutput"), "测试中...", "info");
+  try {
+    var r = await fetch(API + "/models/test", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)}).then(function(r){return r.json()});
+    if (r.status === "ok") {
+      show(document.getElementById("modelOutput"), r.message, "success");
+    } else {
+      show(document.getElementById("modelOutput"), "连接失败: " + (r.message || ""), "error");
+    }
+  } catch(e) {
+    show(document.getElementById("modelOutput"), "请求失败: " + e.message, "error");
+  }
+}
+
+async function doSaveModel() {
+  const body = {
+    id: document.getElementById("mId").value,
+    name: document.getElementById("mName").value,
+    provider: document.getElementById("mProvider").value,
+    api_base: document.getElementById("mApiBase").value,
+    api_key: document.getElementById("mApiKey").value,
+    model: document.getElementById("mModel").value,
+    max_tokens: parseInt(document.getElementById("mMaxTokens").value)||4096,
+    temperature: parseFloat(document.getElementById("mTemp").value)||0.7,
+    enabled: true
+  };
+  if (!body.id) { show(document.getElementById("modelOutput"), "模型ID不能为空", "error"); return; }
+  try {
+    const resp = await fetch(API + "/models", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+    const r = await resp.json();
+    if (resp.ok && r.status !== "error") {
+      // 成功：可能包含自动重命名提示
+      show(document.getElementById("modelOutput"), r.message || "保存成功", "success");
+      loadModels();
+    } else {
+      // 失败：连接测试未通过等
+      show(document.getElementById("modelOutput"), r.message || "保存失败", "error");
+    }
+  } catch(e) {
+    show(document.getElementById("modelOutput"), "请求失败: " + e.message, "error");
+  }
+}
+async function deleteModel(id) {
+  await fetch(API + "/models/" + id, {method:"DELETE"});
+  loadModels();
+}
+
+// ====== 执行记录 ======
+async function loadExecutions() {
+  const data = await fetch(API + "/executions?limit=20").then(r => r.json()).catch(() => []);
+  const el = document.getElementById("executionList");
+  if (!data || data.length === 0) { el.innerHTML = '<div class="empty">暂无执行记录</div>'; return; }
+  let html = "<table><thead><tr><th>执行ID</th><th>匹配策略</th><th>步骤数</th><th>状态</th></tr></thead><tbody>";
+  data.forEach(e => {
+    html += `<tr><td style="font-size:11px;color:var(--text2)">${(e.execution_id||"").slice(0,16)}...</td><td>${(e.matched_strategies||[]).join(", ")||"-"}</td><td>${(e.steps||[]).length}</td><td><span class="tag ${e.status==="completed"?"tag-success":"tag-warning"}">${e.status==="completed"?"已完成":"其他"}</span></td></tr>`;
+  });
+  html += "</tbody></table>";
+  el.innerHTML = html;
+}
+
+// ====== 审计日志 ======
+// 业界做法：Linux audit.log / Kubernetes audit / AWS CloudTrail 都是表格 + 过滤
+// 后端 /logs 已返回 [{timestamp, level, message, extra}]，前端按 [审计] 前缀客户端过滤
+var _auditLogsCache = [];
+var _auditAutoRefreshTimer = null;
+
+async function loadAuditLogs() {
+  // 拉取较多条数（500），客户端过滤 [审计] 行后通常剩几十条
+  var data = await fetch(API + "/logs?limit=500").then(r => r.json()).catch(() => []);
+  if (!Array.isArray(data)) data = [];
+  // 仅保留 [审计] 或 [安全] 前缀的行（其余是系统运行日志，不属于审计范畴）
+  _auditLogsCache = data.filter(function(r){
+    var m = r.message || "";
+    return m.indexOf("[审计]") === 0 || m.indexOf("[安全]") === 0;
+  });
+  renderAuditLogs();
+}
+
+function renderAuditLogs() {
+  var el = document.getElementById("auditList");
+  if (!el) return;
+  var cat = (document.getElementById("auditCategory") || {}).value || "";
+  var lvl = (document.getElementById("auditLevel") || {}).value || "";
+  var kw = ((document.getElementById("auditKeyword") || {}).value || "").trim().toLowerCase();
+
+  var filtered = _auditLogsCache.filter(function(r){
+    var msg = r.message || "";
+    // 类别过滤：[审计] 策略:xxx 中"策略"是第二段；[安全] 拦截... 归到"安全"类
+    if (cat) {
+      if (cat === "安全") {
+        if (msg.indexOf("[安全]") !== 0) return false;
+      } else {
+        // 匹配 "[审计] 类别:" 中的类别字段
+        var m = msg.match(/^\[审计\]\s*([^\s:]+):/);
+        if (!m || m[1] !== cat) return false;
+      }
+    }
+    // 级别过滤
+    if (lvl && r.level !== lvl) return false;
+    // 关键字过滤
+    if (kw && msg.toLowerCase().indexOf(kw) === -1) return false;
+    return true;
+  });
+
+  // 倒序：最新在前
+  filtered.sort(function(a, b){ return (b.timestamp||0) - (a.timestamp||0); });
+
+  // 统计区
+  var statsEl = document.getElementById("auditStats");
+  if (statsEl) {
+    var countByCat = {};
+    _auditLogsCache.forEach(function(r){
+      var m = (r.message || "").match(/^\[([^\]]+)\]\s*([^\s:]+):/);
+      if (m) {
+        var key = m[1] === "安全" ? "安全" : m[2];
+        countByCat[key] = (countByCat[key] || 0) + 1;
+      }
+    });
+    var failCount = _auditLogsCache.filter(function(r){ return (r.message||"").indexOf("result=fail") !== -1; }).length;
+    statsEl.innerHTML = [
+      "总计: <b style='color:var(--text)'>" + _auditLogsCache.length + "</b>",
+      "过滤后: <b style='color:var(--text)'>" + filtered.length + "</b>",
+      "失败: <b style='color:var(--danger)'>" + failCount + "</b>",
+    ].concat(Object.keys(countByCat).map(function(k){
+      return k + ": <b style='color:var(--text2)'>" + countByCat[k] + "</b>";
+    })).join(" &nbsp;|&nbsp; ");
+  }
+
+  if (filtered.length === 0) {
+    el.innerHTML = '<div class="empty">无匹配的审计日志</div>';
+    return;
+  }
+
+  var html = '<table><thead><tr><th style="width:140px">时间</th><th style="width:80px">级别</th><th style="width:90px">类别</th><th>消息</th></tr></thead><tbody>';
+  filtered.forEach(function(r){
+    var msg = r.message || "";
+    var ts = new Date((r.timestamp || 0) * 1000);
+    var tsStr = ts.toLocaleString("zh-CN", {hour12: false});
+    // 提取类别（[审计] 策略:xxx → 策略）
+    var catMatch = msg.match(/^\[([^\]]+)\]\s*([^\s:]+):/);
+    var catLabel = catMatch ? (catMatch[1] === "安全" ? "安全" : catMatch[2]) : "-";
+    var levelTag = r.level === "WARNING" ? "tag-warning"
+                 : r.level === "ERROR" ? "tag-danger"
+                 : "tag-info";
+    // 给 result=ok / result=fail 着色
+    var msgHtml = msg
+      .replace(/result=ok/g, "<span style='color:var(--success)'>result=ok</span>")
+      .replace(/result=fail/g, "<span style='color:var(--danger)'>result=fail</span>")
+      .replace(/target=([^\s]+)/g, "target=<span style='color:#a3e635'>$1</span>");
+    html += '<tr><td style="font-size:11px;color:var(--text2);white-space:nowrap">' + tsStr + '</td>'
+          + '<td><span class="tag ' + levelTag + '">' + (r.level||"-") + '</span></td>'
+          + '<td><span style="color:var(--text2);font-size:12px">' + catLabel + '</span></td>'
+          + '<td style="font-size:12px;font-family:monospace">' + msgHtml + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function toggleAuditAutoRefresh() {
+  var cb = document.getElementById("auditAutoRefresh");
+  if (!cb) return;
+  if (cb.checked) {
+    if (_auditAutoRefreshTimer) clearInterval(_auditAutoRefreshTimer);
+    _auditAutoRefreshTimer = setInterval(loadAuditLogs, 5000);
+  } else {
+    if (_auditAutoRefreshTimer) { clearInterval(_auditAutoRefreshTimer); _auditAutoRefreshTimer = null; }
+  }
+}
+
+// ====== 监控看板 ======
+async function loadDashboard() {
+  const d = await fetch(API + "/overview").then(r => r.json()).catch(() => ({}));
+  document.getElementById("dashboardStats").innerHTML = [
+    {l:"策略", v:fmtNum(d.strategies_count), c:"var(--primary)"},
+    {l:"执行", v:fmtNum(d.total_executions), c:"var(--text)"},
+    {l:"成功", v:fmtNum(d.succeeded), c:"var(--success)"},
+    {l:"失败", v:fmtNum(d.failed), c:"var(--danger)"},
+  ].map(s => `<div class="stat-box"><div class="stat-label">${s.l}</div><div class="stat-val" style="color:${s.c}">${s.v}</div></div>`).join("");
+
+  const execs = await fetch(API + "/executions?limit=5").then(r => r.json()).catch(() => []);
+  const eEl = document.getElementById("dashboardExecs");
+  if (execs.length === 0) { eEl.innerHTML = '<div class="empty">暂无记录</div>'; return; }
+  eEl.innerHTML = "<table><thead><tr><th>ID</th><th>策略</th><th>状态</th></tr></thead><tbody>" +
+    execs.map(e => `<tr><td style="font-size:11px;color:var(--text2)">${(e.execution_id||"").slice(0,12)}...</td><td>${(e.matched_strategies||[]).join(", ")||"-"}</td><td><span class="tag tag-success">${e.status}</span></td></tr>`).join("") +
+    "</tbody></table>";
+}
+
+// ====== 系统状态 ======
+async function checkHealth() {
+  const r = await fetch(API + "/health").then(r => r.json());
+  show(document.getElementById("healthOutput"), '<div style="display:flex;align-items:center;gap:12px;font-size:16px"><span style="color:var(--success);font-size:28px">\u2705</span><div><strong>\u2705 健康状态良好</strong><br><span style="color:var(--text2);font-size:12px">服务正常运行</span></div></div>', "success");
+}
+async function loadAgents() {
+  const d = await fetch(API + "/agents").then(r => r.json()).catch(() => []);
+  if (!d.length) { show(document.getElementById("agentOutput"), "暂无Agent数据", "info"); return; }
+  show(document.getElementById("agentOutput"), "<table><thead><tr><th>ID</th><th>名称</th><th>状态</th><th>任务数</th></tr></thead><tbody>" +
+    d.map(a => `<tr><td>${a.id}</td><td>${a.name}</td><td><span class="tag tag-success">${a.status}</span></td><td>${a.metrics?.tasks_processed||0}</td></tr>`).join("") + "</tbody></table>", "info");
+}
+async function loadAlerts() {
+  const d = await fetch(API + "/alerts").then(r => r.json()).catch(() => []);
+  if (!d.length) { show(document.getElementById("alertOutput"), "\u2705 当前无告警，系统运行正常", "success"); return; }
+  show(document.getElementById("alertOutput"), d.map(a => `<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><span class="tag tag-${a.severity==="high"?"danger":a.severity==="medium"?"warning":"info"}">${a.severity}</span><span>${a.summary}</span></div>`).join(""), "warning");
+}
+
+// Initial load
+loadOverview();
+loadModels();
+loadStrategies();
+loadExecutions();
+loadVerifySettings();
+
+function toggleChat() {
+  var slider = document.getElementById('chatSlider');
+  var overlay = document.getElementById('chatOverlay');
+  if (slider.classList.contains('open')) {
+    slider.classList.remove('open');
+    overlay.classList.remove('show');
+  } else {
+    slider.classList.add('open');
+    overlay.classList.add('show');
+  }
+}
+var sliderHistory = [];
+function addSliderMsg(role, content) {
+  var box = document.getElementById('sliderChatBox');
+  var div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.innerHTML = content.replace(/\n/g, '<br>');
+  var time = document.createElement('div');
+  time.className = 'time';
+  time.textContent = new Date().toLocaleTimeString('zh-CN');
+  div.appendChild(time);
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+// 浮窗聊天键盘事件：Enter 发送，Shift+Enter 换行
+function onSliderChatKeydown(event) {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    sendSliderChat();
+  }
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    sendSliderChat();
+  }
+}
+
+// 浮窗聊天输入框展开/收起
+function toggleSliderChatInputExpand() {
+  var ta = document.getElementById('sliderChatInput');
+  var btn = document.getElementById('sliderChatInputToggleBtn');
+  if (!ta || !btn) return;
+  var expanded = ta.classList.toggle('expanded');
+  if (expanded) {
+    ta.style.minHeight = '120px';
+    btn.innerHTML = '&#x2B13;';
+    btn.title = '收起';
+  } else {
+    ta.style.minHeight = '';
+    btn.innerHTML = '&#x2B12;';
+    btn.title = '展开';
+  }
+  ta.focus();
+}
+
+async function sendSliderChat() {
+  var input = document.getElementById('sliderChatInput');
+  var msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  addSliderMsg('user', msg);
+  sliderHistory.push({role:'user', content:msg});
+  var box = document.getElementById('sliderChatBox');
+  var loading = document.createElement('div');
+  loading.className = 'chat-loading';
+  loading.textContent = '思考中';
+  box.appendChild(loading);
+  box.scrollTop = box.scrollHeight;
+  try {
+    var r = await fetch(API + '/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message:msg, history:sliderHistory.slice(-10)})}).then(function(r){return r.json()});
+    loading.remove();
+    addSliderMsg('assistant', r.reply);
+    sliderHistory.push({role:'assistant', content:r.reply});
+    if (r.actions && r.actions.length > 0) {
+      for (var i = 0; i < r.actions.length; i++) {
+        var action = r.actions[i];
+        addSliderMsg('system', '正在执行: ' + action.action);
+        var result = await fetch(API + '/chat/execute-action', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(action)}).then(function(r){return r.json()});
+        if (result.status === 'ok') {
+          addSliderMsg('system', '✅ ' + result.message);
+          // 策略变更后自动刷新列表
+          if (typeof loadStrategies === 'function' && (action.action === 'add_strategy' || action.action === 'delete_strategy')) {
+            loadStrategies();
+          }
+        } else if (result.status === 'confirmation_required' || result.status === 'password_required') {
+          // 重要操作：弹密码框作为二次确认
+          try {
+            var pwd = await getVerifiedPassword('⚠️ ' + result.message + '\n\n操作: ' + (action.action || ''));
+            var r2 = await fetch(API + '/chat/execute-action', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(Object.assign({confirmed: true, password: pwd}, action))}).then(function(r){return r.json()});
+            if (r2.status === 'ok') {
+              addSliderMsg('system', '✅ ' + r2.message);
+              if (typeof loadStrategies === 'function' && (action.action === 'add_strategy' || action.action === 'delete_strategy')) {
+                loadStrategies();
+              }
+            } else if (r2.status === 'password_wrong' || r2.status === 'password_required') {
+              clearCachedPassword();
+              addSliderMsg('system', '❌ 密码已失效，请重新尝试该操作');
+            } else {
+              addSliderMsg('system', '❌ ' + (r2.message || '执行失败'));
+            }
+          } catch(e) {
+            if (e.message === '用户取消') {
+              addSliderMsg('system', '已取消操作');
+            } else {
+              addSliderMsg('system', '❌ ' + e.message);
+            }
+          }
+        } else {
+          addSliderMsg('system', '❌ ' + (result.message || '执行失败'));
+        }
+      }
+    }
+  } catch(e) {
+    loading.remove();
+    addSliderMsg('assistant', '连接失败');
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+// 浮窗聊天的确认/取消按钮（用于 permission=ask 的高危操作二次确认）
+function addSliderConfirmPrompt(action, message) {
+  var box = document.getElementById('sliderChatBox');
+  var div = document.createElement('div');
+  div.className = 'msg system';
+  div.style.maxWidth = '85%';
+  div.innerHTML = '⚠️ ' + (message || '该操作需要确认') + '<br><br>';
+
+  var btnYes = document.createElement('button');
+  btnYes.className = 'btn btn-success btn-sm';
+  btnYes.textContent = '✓ 确认执行';
+  btnYes.style.marginRight = '8px';
+  btnYes.onclick = function() {
+    div.remove();
+    executeSliderConfirmedAction(action);
+  };
+
+  var btnNo = document.createElement('button');
+  btnNo.className = 'btn btn-ghost btn-sm';
+  btnNo.textContent = '✗ 取消';
+  btnNo.onclick = function() {
+    div.innerHTML = '已取消操作：' + (action.action || '');
+    addSliderMsg('system', '用户已取消操作');
+  };
+
+  div.appendChild(btnYes);
+  div.appendChild(btnNo);
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+// 浮窗聊天：带 confirmed=true 重新调用 execute-action
+async function executeSliderConfirmedAction(action) {
+  var box = document.getElementById('sliderChatBox');
+  addSliderMsg('system', '正在执行（已确认）: ' + (action.action || '') + '...');
+  try {
+    var result = await fetch(API + '/chat/execute-action', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(Object.assign({confirmed: true}, action))
+    }).then(function(r){return r.json()});
+    if (result.status === 'ok') {
+      addSliderMsg('system', '✅ ' + result.message);
+      // 策略变更后自动刷新列表
+      if (typeof loadStrategies === 'function' && (action.action === 'add_strategy' || action.action === 'delete_strategy')) {
+        loadStrategies();
+      }
+    } else {
+      addSliderMsg('system', '❌ ' + (result.message || '执行失败'));
+    }
+  } catch(e) {
+    addSliderMsg('system', '❌ 请求失败: ' + e.message);
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+// Draggable FAB
+document.addEventListener('DOMContentLoaded', function(){
+  var btn = document.getElementById("fabBtn");
+  if (!btn) return;
+  
+  var isDragging = false;
+  var hasMoved = false;
+  var startX, startY, origLeft, origTop;
+
+  btn.addEventListener("mousedown", function(e) {
+    isDragging = true;
+    hasMoved = false;
+    var rect = btn.getBoundingClientRect();
+    startX = e.clientX;
+    startY = e.clientY;
+    origLeft = rect.left;
+    origTop = rect.top;
+    btn.style.cursor = "grabbing";
+    btn.style.transition = "none";
+    e.preventDefault();
+  });
+
+  document.addEventListener("mousemove", function(e) {
+    if (!isDragging) return;
+    var dx = e.clientX - startX;
+    var dy = e.clientY - startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      hasMoved = true;
+    }
+    var newLeft = Math.max(0, Math.min(window.innerWidth - 56, origLeft + dx));
+    var newTop = Math.max(0, Math.min(window.innerHeight - 56, origTop + dy));
+    btn.style.left = newLeft + "px";
+    btn.style.top = newTop + "px";
+    btn.style.right = "auto";
+    btn.style.bottom = "auto";
+  });
+
+  document.addEventListener("mouseup", function(e) {
+    if (!isDragging) return;
+    isDragging = false;
+    btn.style.cursor = "grab";
+    btn.style.transition = "";
+    if (hasMoved) {
+      var rect = btn.getBoundingClientRect();
+      try {
+        sessionStorage.setItem("fab_pos", JSON.stringify({l: rect.left, t: rect.top}));
+      } catch(ex) {}
+    }
+  });
+
+  // Touch support
+  btn.addEventListener("touchstart", function(e) {
+    var t = e.touches[0];
+    isDragging = true;
+    hasMoved = false;
+    var rect = btn.getBoundingClientRect();
+    startX = t.clientX;
+    startY = t.clientY;
+    origLeft = rect.left;
+    origTop = rect.top;
+    btn.style.transition = "none";
+  }, {passive: true});
+
+  document.addEventListener("touchmove", function(e) {
+    if (!isDragging) return;
+    var t = e.touches[0];
+    var dx = t.clientX - startX;
+    var dy = t.clientY - startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
+    btn.style.left = Math.max(0, Math.min(window.innerWidth - 56, origLeft + dx)) + "px";
+    btn.style.top = Math.max(0, Math.min(window.innerHeight - 56, origTop + dy)) + "px";
+    btn.style.right = "auto";
+    btn.style.bottom = "auto";
+  }, {passive: true});
+
+  document.addEventListener("touchend", function() {
+    if (!isDragging) return;
+    isDragging = false;
+    btn.style.transition = "";
+    if (hasMoved) {
+      var rect = btn.getBoundingClientRect();
+      try {
+        sessionStorage.setItem("fab_pos", JSON.stringify({l: rect.left, t: rect.top}));
+      } catch(ex) {}
+    }
+  });
+
+  // Restore saved position
+  try {
+    var saved = sessionStorage.getItem("fab_pos");
+    if (saved) {
+      var p = JSON.parse(saved);
+      btn.style.left = p.l + "px";
+      btn.style.top = p.t + "px";
+      btn.style.right = "auto";
+      btn.style.bottom = "auto";
+    }
+  } catch(ex) {}
+
+  // Initial cursor
+  btn.style.cursor = "grab";
+
+  // Block click if was dragging
+  btn.addEventListener("click", function(e) {
+    if (hasMoved) {
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      hasMoved = false;
+    }
+  }, true);
+});
+
+
+
+</script>
+<button class="fab" onclick="toggleChat()" id="fabBtn" title="智能体对话"><span class="badge"></span></button>
+<div class="chat-overlay" id="chatOverlay" onclick="toggleChat()"></div>
+<div class="chat-slider" id="chatSlider">
+  <div class="chat-slider-header">
+    <h3> 智能体对话</h3>
+    <button class="chat-slider-close" onclick="toggleChat()">X</button>
+  </div>
+  <div class="chat-slider-body" id="sliderChatBox">
+    <div class="msg assistant">你好！我是网闸AI设备智能体的操作助手。<br><br>我可以帮你：<br>1. 添加策略<br>2. 执行编排<br>3. 查看状态<br><br>请告诉我你想做什么？</div>
+  </div>
+  <div class="chat-slider-input">
+    <textarea id="sliderChatInput" placeholder="输入需求...&#10;(Enter 发送，Shift+Enter 换行)" onkeydown="onSliderChatKeydown(event)" rows="2"></textarea>
+    <button class="btn btn-ghost btn-sm" onclick="toggleSliderChatInputExpand()" id="sliderChatInputToggleBtn" title="展开/收起">&#x2B12;</button>
+    <button class="btn btn-primary" onclick="sendSliderChat()">发送</button>
+  </div>
+</div>
+
+</body>
+</html>

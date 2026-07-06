@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>网闸AI设备智能体 - 监控面板</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🛡️</text></svg>">
+<style>
+:root { --bg: #0f1419; --surface: #1a1f2e; --border: #2a3040; --text: #e1e4e8; --text-secondary: #8b929a; --primary: #3b82f6; --success: #22c55e; --warning: #f59e0b; --danger: #ef4444; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+.header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.header h1 { font-size: 18px; display: flex; align-items: center; gap: 8px; }
+.header h1 span { color: var(--primary); }
+.header-right { display: flex; align-items: center; gap: 16px; font-size: 13px; color: var(--text-secondary); }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+.status-dot.online { background: var(--success); box-shadow: 0 0 8px rgba(34,197,94,0.5); }
+.container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+.card h3 { font-size: 12px; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 8px; letter-spacing: 1px; }
+.card .value { font-size: 28px; font-weight: 700; }
+.card .sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.row { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 20px; }
+@media (max-width: 900px) { .row { grid-template-columns: 1fr; } }
+.section-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+th { color: var(--text-secondary); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+td { font-family: 'SF Mono', 'Fira Code', monospace; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.badge-success { background: rgba(34,197,94,0.15); color: var(--success); }
+.badge-warning { background: rgba(245,158,11,0.15); color: var(--warning); }
+.badge-danger { background: rgba(239,68,68,0.15); color: var(--danger); }
+.badge-info { background: rgba(59,130,246,0.15); color: var(--primary); }
+.badge-neutral { background: rgba(139,146,154,0.15); color: var(--text-secondary); }
+.config-panel { margin-top: 16px; }
+.config-panel textarea { width: 100%; min-height: 120px; background: #111827; border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 12px; font-family: 'SF Mono', monospace; font-size: 12px; resize: vertical; }
+.btn { padding: 8px 16px; border-radius: 6px; border: none; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: #2563eb; }
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+.log-list { max-height: 400px; overflow-y: auto; font-family: 'SF Mono', monospace; font-size: 11px; }
+.log-entry { padding: 6px 0; border-bottom: 1px solid rgba(42,48,64,0.5); display: flex; gap: 8px; }
+.log-level { min-width: 56px; font-weight: 600; }
+.log-level.INFO { color: var(--primary); }
+.log-level.WARNING { color: var(--warning); }
+.log-level.ERROR { color: var(--danger); }
+.log-msg { color: var(--text-secondary); }
+.metrics-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.metric-item { text-align: center; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 6px; }
+.metric-item .label { font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
+.metric-item .val { font-size: 18px; font-weight: 700; }
+.tabs { display: flex; gap: 4px; margin-bottom: 16px; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 6px; }
+.tab { padding: 8px 16px; border-radius: 4px; font-size: 13px; cursor: pointer; border: none; background: transparent; color: var(--text-secondary); transition: all 0.2s; }
+.tab.active { background: var(--primary); color: #fff; }
+.tab:hover:not(.active) { color: var(--text); }
+.form-group { margin-bottom: 12px; }
+.form-group label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+.form-group input, .form-group select { width: 100%; padding: 8px 12px; background: #111827; border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px; }
+.empty-state { text-align: center; padding: 32px; color: var(--text-secondary); font-size: 13px; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.loading { animation: pulse 1.5s ease-in-out infinite; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1><span>🛡️</span> 网闸AI设备智能体 · 监控面板</h1>
+  <div class="header-right">
+    <span id="statusBadge"><span class="status-dot online"></span>运行中</span>
+    <span id="refreshTime"></span>
+    <button class="btn btn-primary btn-sm" onclick="refreshAll()">🔄 刷新</button>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Stats Cards -->
+  <div class="grid" id="statsCards"></div>
+
+  <!-- Tabs: 总览 / 策略 / 执行 / 指标 / 配置 -->
+  <div class="tabs">
+    <button class="tab active" data-tab="overview">总览</button>
+    <button class="tab" data-tab="strategies">策略管理</button>
+    <button class="tab" data-tab="executions">执行记录</button>
+    <button class="tab" data-tab="metrics">指标</button>
+    <button class="tab" data-tab="config">策略配置</button>
+  </div>
+
+  <!-- Tab Content -->
+  <div id="tabContent">
+    <div class="row">
+      <div class="card"><h3 class="section-title">📋 执行记录</h3><div id="executionList"><div class="empty-state">加载中...</div></div></div>
+      <div class="card"><h3 class="section-title">📜 实时日志</h3><div class="log-list" id="logList"><div class="empty-state">加载中...</div></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api/v1';
+let activeTab = 'overview';
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    activeTab = tab.dataset.tab;
+    renderTabContent();
+  });
+});
+
+async function apiFetch(path) {
+  try {
+    const res = await fetch(`${API}${path}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (e) {
+    console.error(`API ${path}:`, e);
+    return null;
+  }
+}
+
+function fmtTime(ts) {
+  return new Date(ts * 1000).toLocaleString('zh-CN');
+}
+
+function valOrDash(v, unit='') {
+  return v != null && v !== undefined ? v + unit : '-';
+}
+
+async function refreshAll() {
+  document.getElementById('refreshTime').textContent = new Date().toLocaleTimeString('zh-CN');
+  await Promise.all([renderStats(), renderTabContent()]);
+}
+
+async function renderStats() {
+  const data = await apiFetch('/overview');
+  if (!data) return;
+  const cards = [
+    { label: '执行总次数', value: valOrDash(data.total_evaluations), sub: '已成功 ' + valOrDash(data.succeeded) + ' / 已失败 ' + valOrDash(data.failed) },
+    { label: '策略数量', value: valOrDash(data.strategies_count), sub: '已加载策略' },
+    { label: '日志总量', value: valOrDash(data.log_stats?.total), sub: 'INFO ' + valOrDash(data.log_stats?.by_level?.INFO) + ' / WARN ' + valOrDash(data.log_stats?.by_level?.WARNING) },
+    { label: '系统状态', value: data.status || 'running', sub: '最后更新 ' + fmtTime(data.timestamp) },
+  ];
+  document.getElementById('statsCards').innerHTML = cards.map(c =>
+    `<div class="card"><h3>${c.label}</h3><div class="value">${c.value}</div><div class="sub">${c.sub}</div></div>`
+  ).join('');
+}
+
+async function renderExecutions() {
+  const data = await apiFetch('/executions?limit=20');
+  if (!data || data.length === 0) return '<div class="empty-state">暂无执行记录</div>';
+  return `<table><thead><tr><th>ID</th><th>状态</th><th>匹配策略</th><th>时间</th></tr></thead><tbody>
+    ${data.map(e => `<tr>
+      <td style="color:var(--text-secondary)">${(e.execution_id||'').slice(0,16)}...</td>
+      <td><span class="badge badge-${e.status === 'completed' ? 'success' : e.status === 'no_match' ? 'warning' : 'danger'}">${e.status}</span></td>
+      <td>${(e.matched_strategies||[]).join(', ') || '-'}</td>
+      <td style="color:var(--text-secondary)">-</td>
+    </tr>`).join('')}
+  </tbody></table>`;
+}
+
+async function renderLogs() {
+  const data = await apiFetch('/logs?limit=30');
+  if (!data || data.length === 0) return '<div class="empty-state">暂无日志</div>';
+  return data.map(l => `<div class="log-entry"><span class="log-level ${l.level}">${l.level}</span><span class="log-msg">${l.message}</span></div>`).join('');
+}
+
+async function renderStrategies() {
+  const data = await apiFetch('/strategies');
+  if (!data || data.length === 0) return '<div class="empty-state">暂无策略配置</div>';
+  return `<table><thead><tr><th>名称</th><th>优先级</th><th>触发条件</th><th>步骤</th><th>状态</th></tr></thead><tbody>
+    ${data.map(s => `<tr>
+      <td><strong>${s.name}</strong></td>
+      <td>${s.priority}</td>
+      <td style="font-size:11px;color:var(--text-secondary)">${(s.triggers||[]).map(t => t.field+' '+t.operator).join(', ') || '-'}</td>
+      <td>${(s.steps||[]).length} 步</td>
+      <td><span class="badge badge-${s.enabled ? 'success' : 'neutral'}">${s.enabled ? '启用' : '禁用'}</span></td>
+    </tr>`).join('')}
+  </tbody></table>`;
+}
+
+async function renderMetrics() {
+  const data = await apiFetch('/metrics');
+  if (!data) return '<div class="empty-state">暂无指标数据</div>';
+  let html = '<div class="metrics-row">';
+  if (data.counters) {
+    Object.entries(data.counters).forEach(([k,v]) => {
+      html += `<div class="metric-item"><div class="label">${k}</div><div class="val">${v}</div></div>`;
+    });
+  }
+  html += '</div>';
+  if (data.latencies) {
+    html += '<h3 style="font-size:13px;color:var(--text-secondary);margin:16px 0 8px">延迟统计 (秒)</h3>';
+    html += '<table><thead><tr><th>指标</th><th>平均</th><th>P50</th><th>P95</th><th>P99</th></tr></thead><tbody>';
+    Object.entries(data.latencies).forEach(([k,v]) => {
+      html += `<tr><td>${k}</td><td>${v.avg}</td><td>${v.p50}</td><td>${v.p95}</td><td>${v.p99}</td></tr>`;
+    });
+    html += '</tbody></table>';
+  }
+  return html;
+}
+
+async function renderConfig() {
+  const strategies = await apiFetch('/strategies');
+  const jsonStr = JSON.stringify(strategies, null, 2);
+  return `<div class="config-panel">
+    <div class="form-group"><label>当前策略配置 (JSON)</label>
+      <textarea id="configEditor">${jsonStr === 'null' ? '[]' : jsonStr}</textarea>
+    </div>
+    <button class="btn btn-primary" onclick="applyConfig()">应用配置</button>
+    <span id="configResult" style="margin-left:12px;font-size:12px;color:var(--success)"></span>
+  </div>`;
+}
+
+async function applyConfig() {
+  try {
+    const strategies = JSON.parse(document.getElementById('configEditor').value);
+    document.getElementById('configResult').textContent = '策略需要逐条通过API添加';
+  } catch(e) {
+    document.getElementById('configResult').style.color = 'var(--danger)';
+    document.getElementById('configResult').textContent = 'JSON格式错误';
+  }
+}
+
+async function renderTabContent() {
+  const container = document.getElementById('tabContent');
+  if (activeTab === 'overview') {
+    const [execHtml, logHtml] = await Promise.all([renderExecutions(), renderLogs()]);
+    container.innerHTML = `<div class="row"><div class="card"><h3 class="section-title">📋 执行记录</h3>${execHtml}</div><div class="card"><h3 class="section-title">📜 实时日志</h3><div class="log-list">${logHtml}</div></div></div>`;
+  } else if (activeTab === 'strategies') {
+    const html = await renderStrategies();
+    container.innerHTML = `<div class="card">${html}</div>`;
+  } else if (activeTab === 'executions') {
+    const html = await renderExecutions();
+    container.innerHTML = `<div class="card">${html}</div>`;
+  } else if (activeTab === 'metrics') {
+    const html = await renderMetrics();
+    container.innerHTML = `<div class="card">${html}</div>`;
+  } else if (activeTab === 'config') {
+    const html = await renderConfig();
+    container.innerHTML = `<div class="card">${html}</div>`;
+  }
+}
+
+// Auto-refresh
+refreshAll();
+setInterval(refreshAll, 10000);
+</script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+strategies:
+  - id: "high_risk_traffic_block"
+    name: "高风险流量阻断策略"
+    description: "当检测到来自高风险源的流量时，自动阻断并进行深度分析"
+    enabled: true
+    priority: 10
+    triggers:
+      - field: "source_ip"
+        operator: "regex"
+        value: '^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.).*'
+      - field: "port"
+        operator: "in"
+        value: [22, 23, 3389, 3306, 6379]
+    steps:
+      - step_id: "security_audit_01"
+        agent: "security_agent"
+        action: "audit"
+        params:
+          deep_scan: true
+        timeout: 30
+      - step_id: "policy_check_01"
+        agent: "policy_agent"
+        action: "compliance_check"
+        params:
+          check_level: "strict"
+        timeout: 15
+      - step_id: "monitor_alert_01"
+        agent: "monitor_agent"
+        action: "analyze_anomaly"
+        params:
+          alert_level: "high"
+        timeout: 10
+    fallback:
+      action: "block"
+      message: "高风险流量已自动阻断"
+
+  - id: "data_transfer_inspection"
+    name: "数据传输内容审查策略"
+    description: "对经过网闸的数据传输进行内容安全审查和合规检查"
+    enabled: true
+    priority: 20
+    triggers:
+      - field: "protocol"
+        operator: "in"
+        value: ["http", "https", "ftp", "smtp"]
+    steps:
+      - step_id: "content_audit_01"
+        agent: "security_agent"
+        action: "audit"
+        params:
+          scan_content: true
+        timeout: 30
+      - step_id: "policy_review_01"
+        agent: "policy_agent"
+        action: "analyze"
+        params:
+          compliance_standard: "等保2.0"
+        timeout: 20
+    fallback:
+      action: "review"
+      message: "需要人工审核"
+
+  - id: "routine_traffic_monitor"
+    name: "常规流量健康监测"
+    description: "对常规流量进行健康检查和性能监测"
+    enabled: true
+    priority: 100
+    triggers:
+      - field: "protocol"
+        operator: "exists"
+        value: true
+    steps:
+      - step_id: "health_check_01"
+        agent: "monitor_agent"
+        action: "health_check"
+        params: {}
+        timeout: 10
+    fallback:
+      action: "allow"
+      message: "允许通过"

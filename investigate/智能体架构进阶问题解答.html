@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智能体架构进阶问题解答 · Skill / 多智能体 / 评估 / 可观测</title>
+<style>
+:root{
+  --bg:#f8fafc;--surface:#f1f5f9;--card:#ffffff;--border:#e2e8f0;
+  --text:#1e293b;--text2:#64748b;--text3:#94a3b8;
+  --primary:#2563eb;--primary-dim:#1e40af;--primary-bg:rgba(37,99,235,.08);
+  --success:#16a34a;--success-bg:rgba(22,163,74,.08);
+  --warning:#d97706;--warning-bg:rgba(217,119,6,.08);
+  --danger:#dc2626;--danger-bg:rgba(220,38,38,.08);
+  --code-bg:#f8fafc;--code-border:#e2e8f0;
+  --purple:#7c3aed;--purple-bg:rgba(124,58,237,.08);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  background:var(--bg);color:var(--text);line-height:1.7;font-size:14px;
+}
+a{color:var(--primary);text-decoration:none}
+a:hover{text-decoration:underline}
+
+.topnav{
+  position:fixed;top:0;left:0;right:0;height:52px;
+  background:rgba(255,255,255,.95);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);z-index:1000;
+  display:flex;align-items:center;padding:0 24px;gap:24px;
+  box-shadow:0 1px 3px rgba(0,0,0,.04);
+}
+.topnav .logo{font-size:15px;font-weight:600;color:var(--primary);display:flex;align-items:center;gap:8px;white-space:nowrap}
+.topnav .nav-links{display:flex;gap:4px;flex:1;overflow-x:auto;scrollbar-width:none}
+.topnav .nav-links::-webkit-scrollbar{display:none}
+.topnav .nav-links a{
+  padding:6px 12px;border-radius:6px;font-size:12px;color:var(--text2);
+  white-space:nowrap;transition:all .15s;
+}
+.topnav .nav-links a:hover{background:var(--primary-bg);color:var(--primary);text-decoration:none}
+.topnav .nav-links a.active{background:var(--primary);color:#fff}
+
+.container{max-width:1100px;margin:0 auto;padding:80px 24px 60px}
+
+.hero{
+  background:linear-gradient(135deg,rgba(37,99,235,.08) 0%,rgba(124,58,237,.04) 100%);
+  border:1px solid var(--border);border-radius:14px;padding:36px 32px;margin-bottom:32px;
+  box-shadow:0 1px 3px rgba(15,23,42,.04);
+}
+.hero h1{font-size:26px;font-weight:700;margin-bottom:10px;letter-spacing:-.5px}
+.hero .subtitle{color:var(--text2);font-size:14px;margin-bottom:18px}
+.hero .meta{display:flex;gap:12px;flex-wrap:wrap}
+.hero .meta .tag{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500;
+  background:var(--surface);border:1px solid var(--border);color:var(--text2);
+}
+.hero .meta .tag.success{background:var(--success-bg);color:var(--success);border-color:rgba(22,163,74,.2)}
+.hero .meta .tag.purple{background:var(--purple-bg);color:var(--purple);border-color:rgba(124,58,237,.2)}
+
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:32px}
+.summary-card{
+  background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;
+  display:flex;flex-direction:column;gap:4px;
+  box-shadow:0 1px 3px rgba(15,23,42,.04);
+}
+.summary-card .label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
+.summary-card .value{font-size:16px;font-weight:600}
+.summary-card .value.ok{color:var(--success)}
+.summary-card .value.warn{color:var(--warning)}
+.summary-card .value.purple{color:var(--purple)}
+
+.section{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:28px;margin-bottom:24px;scroll-margin-top:80px;
+  box-shadow:0 1px 3px rgba(15,23,42,.04),0 1px 2px rgba(15,23,42,.02);
+}
+.section-header{display:flex;align-items:center;gap:12px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.section-num{
+  width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:14px;flex-shrink:0;
+  background:var(--primary-bg);color:var(--primary);border:1px solid rgba(37,99,235,.2);
+}
+.section-num.purple{background:var(--purple-bg);color:var(--purple);border-color:rgba(124,58,237,.2)}
+.section-num.warn{background:var(--warning-bg);color:var(--warning);border-color:rgba(217,119,6,.2)}
+.section-title{font-size:17px;font-weight:600}
+.section-tag{margin-left:auto;font-size:11px;padding:3px 10px;border-radius:12px;font-weight:500;background:var(--primary-bg);color:var(--primary)}
+
+p{margin-bottom:12px;color:var(--text)}
+p .em{color:var(--primary);font-weight:500}
+p .em.purple{color:var(--purple)}
+p .hl{background:var(--primary-bg);padding:1px 6px;border-radius:4px;color:var(--primary);font-weight:500}
+p strong{color:#0f172a;font-weight:600}
+
+h3.sub{font-size:14px;color:var(--text);margin:20px 0 10px;font-weight:600;display:flex;align-items:center;gap:8px}
+h3.sub::before{content:'';width:3px;height:14px;background:var(--primary);border-radius:2px}
+h3.sub.purple::before{background:var(--purple)}
+h3.sub.small{font-size:13px;color:var(--text2);font-weight:500}
+h3.sub.small::before{height:10px;background:var(--text3)}
+
+pre{
+  background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;
+  padding:14px 16px;overflow-x:auto;margin:12px 0;font-size:12.5px;line-height:1.6;
+}
+pre code{color:#475569;font-family:'JetBrains Mono','Fira Code','Consolas',monospace}
+pre .kw{color:#7c3aed}
+pre .str{color:#16a34a}
+pre .com{color:#94a3b8;font-style:italic}
+pre .fn{color:#2563eb}
+pre .num{color:#d97706}
+pre .var{color:#dc2626}
+pre .op{color:#0891b2}
+
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+th{background:var(--surface);color:var(--text2);text-align:left;padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:600;border-bottom:1px solid var(--border)}
+td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:rgba(37,99,235,.04)}
+td .ok{color:var(--success)}
+td .no{color:var(--danger)}
+td .warn{color:var(--warning)}
+td .pri{color:var(--primary)}
+td code{background:rgba(37,99,235,.08);padding:1px 5px;border-radius:3px;font-size:12px;color:var(--primary)}
+
+ul,ol{margin:10px 0 14px 20px}
+li{margin-bottom:6px}
+li::marker{color:var(--primary)}
+
+.callout{
+  border-left:3px solid;padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0;font-size:13px;
+}
+.callout.tip{background:var(--success-bg);border-color:var(--success)}
+.callout.tip .icon{color:var(--success)}
+.callout.note{background:var(--primary-bg);border-color:var(--primary)}
+.callout.note .icon{color:var(--primary)}
+.callout.warn{background:var(--warning-bg);border-color:var(--warning)}
+.callout.warn .icon{color:var(--warning)}
+.callout.purple{background:var(--purple-bg);border-color:var(--purple)}
+.callout.purple .icon{color:var(--purple)}
+.callout .icon{margin-right:6px;font-weight:700}
+.callout .title{font-weight:600;margin-bottom:4px;display:block}
+
+.file-ref{
+  display:inline-flex;align-items:center;gap:4px;
+  background:rgba(37,99,235,.06);border:1px solid var(--border);border-radius:4px;
+  padding:1px 8px;font-size:12px;color:var(--primary);font-family:monospace;
+}
+.file-ref::before{content:'📄'}
+
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0;font-size:12px}
+.flow .node{
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  padding:8px 12px;min-width:80px;text-align:center;
+}
+.flow .node.primary{background:var(--primary-bg);border-color:var(--primary);color:var(--primary)}
+.flow .node.success{background:var(--success-bg);border-color:var(--success);color:var(--success)}
+.flow .node.purple{background:var(--purple-bg);border-color:var(--purple);color:var(--purple)}
+.flow .arrow{color:var(--text3);font-size:14px}
+
+.cols-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:768px){.cols-2{grid-template-columns:1fr}}
+
+:target{animation:targetPulse 1.5s ease}
+@keyframes targetPulse{
+  0%{box-shadow:0 0 0 0 rgba(59,130,246,.4)}
+  100%{box-shadow:0 0 0 12px rgba(59,130,246,0)}
+}
+
+.sources{margin-top:24px;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px;box-shadow:0 1px 3px rgba(0,0,0,.03)}
+.sources .title{color:var(--text2);font-weight:600;margin-bottom:8px;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.sources ul{margin:0 0 0 16px}
+.sources li{margin-bottom:4px;color:var(--text2)}
+.sources a{color:var(--primary);word-break:break-all}
+
+.footer{text-align:center;color:var(--text3);font-size:12px;padding:24px 0;border-top:1px solid var(--border);margin-top:40px}
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="logo">◆ 智能体架构进阶</div>
+  <div class="nav-links">
+    <a href="#summary">总览</a>
+    <a href="#q1">1.Skill加载</a>
+    <a href="#q2">2.Claude官方</a>
+    <a href="#q3">3.百级规模</a>
+    <a href="#q4">4.多智能体调度</a>
+    <a href="#q5">5.质量评估</a>
+    <a href="#q6">6.Hook机制</a>
+    <a href="#q7">7.审计可观测</a>
+    <a href="#q8">8.知识库</a>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>智能体架构进阶问题解答</h1>
+    <div class="subtitle">Skill 加载 · Claude 官方机制 · 百级规模设计 · 多智能体调度 · 质量评估 · Hook · 可观测性 · 知识库</div>
+    <div class="meta">
+      <span class="tag">面向：生产级 AI Agent</span>
+      <span class="tag purple">参考：Anthropic / LangChain / LangFuse</span>
+      <span class="tag success">8 个核心问题</span>
+      <span class="tag">更新：2026-07</span>
+    </div>
+  </div>
+
+  <!-- 总览 -->
+  <div class="summary-grid" id="summary">
+    <div class="summary-card"><span class="label">问题总数</span><span class="value">8</span></div>
+    <div class="summary-card"><span class="label">加载机制</span><span class="value ok">3 档</span></div>
+    <div class="summary-card"><span class="label">Claude 七件套</span><span class="value purple">7 组件</span></div>
+    <div class="summary-card"><span class="label">规模临界</span><span class="value warn">10 / 50</span></div>
+    <div class="summary-card"><span class="label">调度模式</span><span class="value ok">3 种</span></div>
+    <div class="summary-card"><span class="label">评估层级</span><span class="value ok">3 层</span></div>
+    <div class="summary-card"><span class="label">Hook 类型</span><span class="value purple">6 类</span></div>
+    <div class="summary-card"><span class="label">可观测三支柱</span><span class="value ok">Trace/Metric/Log</span></div>
+  </div>
+
+  <!-- 问题 1 -->
+  <div class="section" id="q1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <div class="section-title">Skill 加载机制</div>
+      <span class="section-tag">通用模式</span>
+    </div>
+
+    <p><strong>问题：</strong>Agent 的 skill 是怎么从代码变成可被调用的？加载时机和机制有哪些主流做法？</p>
+
+    <h3 class="sub">三种加载档位（按规模递进）</h3>
+    <table>
+      <thead><tr><th>规模</th><th>方式</th><th>实现</th><th>业界代表</th></tr></thead>
+      <tbody>
+        <tr><td class="ok">&lt; 10 个</td><td>静态注册</td><td>字典 / 装饰器，模块导入即就绪，<code>O(1)</code> 查找</td><td>LangChain <code>@tool</code>、CrewAI <code>Agent.tools=[...]</code></td></tr>
+        <tr><td class="warn">10 ~ 50 个</td><td>动态发现</td><td>entry_points / 文件系统扫描 / 插件目录，启动时加载</td><td>VS Code 插件、Django apps</td></tr>
+        <tr><td class="no">&gt; 50 个</td><td>RAG 检索</td><td>把 tool description 向量化，按用户消息召回 top-K</td><td>LangChain ToolRetriever / VectorStoreRetrieverTool</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="sub">加载时机</h3>
+    <ul>
+      <li><strong>饿汉式（Eager）</strong>：服务启动时全部加载到内存，首调用零延迟，但启动慢</li>
+      <li><strong>懒汉式（Lazy）</strong>：首次调用时才加载，启动快但首调用慢；适合重型 / 低频 skill</li>
+      <li><strong>预热式（Warm-up）</strong>：启动后异步后台预加载高频 skill，兼顾两者</li>
+    </ul>
+
+    <h3 class="sub">生命周期</h3>
+    <div class="flow">
+      <div class="node primary">注册<br><small>register</small></div>
+      <span class="arrow">→</span>
+      <div class="node">校验<br><small>schema</small></div>
+      <span class="arrow">→</span>
+      <div class="node">路由<br><small>intent / RAG</small></div>
+      <span class="arrow">→</span>
+      <div class="node">调用<br><small>execute</small></div>
+      <span class="arrow">→</span>
+      <div class="node">失败<br><small>fallback</small></div>
+      <span class="arrow">→</span>
+      <div class="node success">审计<br><small>log</small></div>
+    </div>
+
+    <h3 class="sub">设计要点</h3>
+    <ul>
+      <li><span class="hl">协议化</span>：skill 应是声明式 schema（name / description / args_schema / permission），与具体实现解耦。LangChain 用 <code>args_schema: Pydantic</code>，Anthropic 用 JSON Schema</li>
+      <li><span class="hl">权限模型</span>：CrewAI 的 <code>allow / ask / deny</code> 三态权限，写操作必须 <code>ask</code>（人工确认）</li>
+      <li><span class="hl">参数校验前置</span>：在调用 LLM 后、执行副作用前用 Pydantic 校验，避免 LLM 幻觉参数炸穿下游</li>
+      <li><span class="hl">白名单执行</span>：LLM 返回 action name 后由代码查找注册表，<strong>不是 LLM 直接执行</strong>，未注册的直接拒绝</li>
+      <li><span class="hl">失败可降级</span>：skill 调用失败要有 fallback（默认动作 / 提示用户 / 转人工）</li>
+    </ul>
+
+    <div class="callout note">
+      <span class="title"><span class="icon">◆</span>业界共识</span>
+      <strong>渐进式披露</strong>（progressive disclosure）：不要一开始就把所有 skill 详情塞给模型，先让模型看到摘要，需要时再加载详情。这是 Claude Code 的核心设计哲学之一。
+    </div>
+  </div>
+
+  <!-- 问题 2 -->
+  <div class="section" id="q2">
+    <div class="section-header">
+      <div class="section-num purple">2</div>
+      <div class="section-title">Claude 官方的加载机制</div>
+      <span class="section-tag">Anthropic 2026</span>
+    </div>
+
+    <p><strong>问题：</strong>Claude Code 官方的 skill / 工具加载机制是什么？为什么这么设计？</p>
+
+    <p>截至 2026 年，Claude Code 实际上是一个 <span class="em">"七件套"</span> 架构。2026 年 4 月 VILA Lab 的学术论文系统分析了它的 TypeScript 源码，结论是：核心永远是那几个解耦的扩展点。</p>
+
+    <h3 class="sub">Claude Code 七大组件</h3>
+    <table>
+      <thead><tr><th>组件</th><th>本质</th><th>加载方式</th><th>典型用途</th></tr></thead>
+      <tbody>
+        <tr><td class="pri"><strong>Skills</strong></td><td>Markdown 文件</td><td>按需触发（关键词匹配 / 模型主动调用）</td><td>领域知识、操作 SOP、代码规范</td></tr>
+        <tr><td class="pri"><strong>MCP</strong></td><td>标准化协议</td><td>Server 进程，stdio / SSE 通信</td><td>接外部系统（DB / API / 文件系统）</td></tr>
+        <tr><td><strong>Commands</strong></td><td>斜杠命令</td><td>静态注册，<code>/command</code> 触发</td><td>常用操作快捷方式</td></tr>
+        <tr><td class="pri"><strong>Hooks</strong></td><td>事件回调</td><td>配置文件声明，事件触发</td><td>自动 lint / 测试 / 审计</td></tr>
+        <tr><td><strong>Subagents</strong></td><td>子 Agent</td><td>主 Agent 调度，独立上下文</td><td>分工明确的重活</td></tr>
+        <tr><td><strong>CLAUDE.md</strong></td><td>项目记忆</td><td>启动时自动注入 system prompt</td><td>项目规范、技术栈约定</td></tr>
+        <tr><td><strong>Plugins</strong></td><td>可分发包</td><td>市场安装，包含上述任意组合</td><td>团队复用、社区分发</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="sub">Skill 的加载机制（Anthropic 独特设计）</h3>
+    <p>Claude 的 skill 不是代码，而是 <span class="em">Markdown 文件</span>。这是它和 LangChain / CrewAI 最大的区别。</p>
+
+    <div class="flow">
+      <div class="node">skill.md 文件</div>
+      <span class="arrow">→</span>
+      <div class="node primary"> frontmatter<br><small>name + description</small></div>
+      <span class="arrow">→</span>
+      <div class="node primary">加载到模型<br><small>仅 frontmatter</small></div>
+      <span class="arrow">→</span>
+      <div class="node">模型判断需要</div>
+      <span class="arrow">→</span>
+      <div class="node success">展开正文<br><small>progressive disclosure</small></div>
+    </div>
+
+    <pre><code><span class="com">---</span>
+<span class="var">name</span>: pdf-reader
+<span class="var">description</span>: Reads PDF files and extracts text/tables/images
+<span class="com">---</span>
+<span class="com"># PDF Reading Skill</span>
+
+When the user asks to read a PDF:
+1. Use the <span class="fn">extract_pdf</span> MCP tool
+2. For tables, prefer the <span class="fn">table_extract</span> mode
+3. Return markdown-formatted output
+
+<span class="com">## Edge cases</span>
+- Encrypted PDFs: prompt user for password
+- Scanned PDFs: route to OCR subagent</code></pre>
+
+    <h3 class="sub">为什么这么设计（Anthropic 的设计哲学）</h3>
+    <ol>
+      <li><strong>渐进式披露</strong>：模型一开始只看到 skill 的 <code>name + description</code>（几十 token），需要时才加载正文（可能上千 token）。避免一次塞几万 token 把上下文撑爆</li>
+      <li><strong>文件即配置</strong>：Markdown 是最普遍的格式，门槛极低，非工程师也能写。文件即文档、即版本控制、即代码评审对象</li>
+      <li><strong>协议化（MCP）</strong>：把"工具实现"和"模型如何调用"解耦。MCP server 可以是 Python / Node / Go 任意语言，Claude 只关心协议（JSON-RPC over stdio / SSE）</li>
+      <li><strong>事件驱动（Hooks）</strong>：把横切关注点（审计 / 安全 / 自动化）从主流程剥离，避免主 prompt 被污染</li>
+      <li><strong>子 Agent 隔离上下文</strong>：Subagent 有独立 context window，主 Agent 不会被冗长中间结果污染。对齐 AutoGen GroupChat 的设计</li>
+      <li><strong>项目记忆固化（CLAUDE.md）</strong>：把团队约定、技术栈、规范固化为文件，避免每次会话重复声明。对齐 Cursor <code>.cursorrules</code>、Aider <code>.aider.conf.yml</code></li>
+    </ol>
+
+    <div class="callout purple">
+      <span class="title"><span class="icon">◆</span>核心洞察</span>
+      Anthropic 的设计反直觉之处：<strong>skill 不应该是代码</strong>。代码解决"怎么做"，但 Agent 的大问题是"什么时候做、按什么 SOP 做"，这是知识层面的问题，用 Markdown 表达最自然。MCP 解决"怎么做"的部分，两者正交分解。
+    </div>
+
+    <div class="callout note">
+      <span class="title"><span class="icon">◆</span>SDK 演进</span>
+      2026 年 5 月，Anthropic 把 <code>Claude Code SDK</code> 改名为 <code>Claude Agent SDK</code>——背后是判断：这不再是"帮你写代码的工具"，而是能自主读代码、改代码、跑测试的通用 Agent 平台。
+    </div>
+  </div>
+
+  <!-- 问题 3 -->
+  <div class="section" id="q3">
+    <div class="section-header">
+      <div class="section-num warn">3</div>
+      <div class="section-title">生产系统 80-100 skill 该如何设计</div>
+      <span class="section-tag">大规模</span>
+    </div>
+
+    <p><strong>问题：</strong>当 skill 数量到 80-100 这个量级，静态注册 + 全量塞 prompt 会爆，怎么设计？</p>
+
+    <div class="callout warn">
+      <span class="title"><span class="icon">!</span>问题本质</span>
+      100 个 skill 的 description 平均 100 token，全量塞 prompt = 1 万 token，还没算 schema。模型注意力会被稀释，<strong>选错概率随 skill 数量线性上升</strong>（参考 Anthropic 内部测试）。问题不是"内存不够"，是"注意力不够"。
+    </div>
+
+    <h3 class="sub">三层路由架构（业界共识）</h3>
+    <div class="flow">
+      <div class="node primary">用户输入</div>
+      <span class="arrow">→</span>
+      <div class="node primary">L1 意图分类<br><small>Router LLM<br>max_tokens=200</small></div>
+      <span class="arrow">→</span>
+      <div class="node primary">L2 工具检索<br><small>RAG top-K=5~10</small></div>
+      <span class="arrow">→</span>
+      <div class="node success">L3 执行<br><small>Pydantic + 白名单</small></div>
+    </div>
+
+    <h3 class="sub small">L1 — 意图分类（收窄空间）</h3>
+    <p>用一次便宜的 LLM 调用（小模型 / 降参数）把用户消息分到 5-10 个领域（如 <code>strategy_config</code> / <code>auth</code> / <code>model_config</code>）。这一步只看意图，不生成参数。</p>
+
+    <h3 class="sub small">L2 — 工具检索（RAG）</h3>
+    <p>对每个意图域，把该域内所有 skill 的 <code>(name, description)</code> 向量化，按用户消息召回 top-K（一般 5-10 个）。只有这 K 个 skill 的完整 schema 才会被塞进 prompt。</p>
+    <pre><code><span class="com"># 业界做法：LangChain ToolRetriever / VectorStoreRetrieverTool</span>
+<span class="kw">from</span> langchain.tools.retriever <span class="kw">import</span> ToolRetriever
+
+retriever = vector_store.as_retriever(search_kwargs={<span class="str">"k"</span>: <span class="num">8</span>})
+<span class="com"># Agent 只看到 8 个相关工具的描述，而不是 100 个</span>
+agent = AgentExecutor(tools=[], retriever=retriever, ...)</code></pre>
+
+    <h3 class="sub small">L3 — 执行（不变）</h3>
+    <p>白名单 + Pydantic 校验 + 权限模型，和静态注册完全一致。L1/L2 解决"选哪个"，L3 解决"安全执行"。</p>
+
+    <h3 class="sub">关键技术补充</h3>
+    <table>
+      <thead><tr><th>技术</th><th>作用</th><th>典型实现</th></tr></thead>
+      <tbody>
+        <tr><td>命名空间分组</td><td><code>db.query</code> / <code>db.migrate</code> 同域聚集</td><td>动态 prefix</td></tr>
+        <tr><td>工具描述压缩</td><td>去掉冗余示例，只留 schema + 一句话</td><td>docstring 精简</td></tr>
+        <tr><td>嵌套 Agent</td><td>主 Agent 调子 Agent，子 Agent 自带工具集</td><td>Subagent / GroupChat</td></tr>
+        <tr><td>路由缓存</td><td>同义 query 命中过就缓存意图</td><td>embedding + TTL</td></tr>
+        <tr><td>工具版本化</td><td>同名不同版本，灰度切换</td><td><code>v1.query</code> / <code>v2.query</code></td></tr>
+        <tr><td>失败统计</td><td>低使用率 / 高失败率 skill 自动下线</td><td>usage metrics</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="sub">规模临界点（业界共识）</h3>
+    <table>
+      <thead><tr><th>Skill 数量</th><th>推荐做法</th><th>业界参考</th></tr></thead>
+      <tbody>
+        <tr><td class="ok">&lt; 10</td><td>静态注册 + 意图分类</td><td>LangChain 默认</td></tr>
+        <tr><td class="warn">10-50</td><td>分组 + 工具描述压缩</td><td>LangChain ToolRetriever</td></tr>
+        <tr><td>50-100</td><td>RAG 工具检索 + 子 Agent 分工</td><td>Anthropic Subagents</td></tr>
+        <tr><td class="no">&gt; 100</td><td>分层 Agent 网络 + 工具市场</td><td>OpenAI Assistants API v2</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <span class="title"><span class="icon">✓</span>实践建议</span>
+      <strong>不要一开始就上 RAG 工具检索</strong>。这是过度工程。先静态注册 + 意图分类撑到 10-15 个，再考虑分组。RAG 检索本身有召回率问题（top-K 可能漏掉正确工具），不到 50 个不值得这个复杂度。
+    </div>
+  </div>
+
+  <!-- 问题 4 -->
+  <div class="section" id="q4">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <div class="section-title">多智能体调度 · 是否使用状态机</div>
+      <span class="section-tag">Orchestration</span>
+    </div>
+
+    <p><strong>问题：</strong>多智能体如何调度？业界是否使用状态机？</p>
+
+    <h3 class="sub">三大框架对状态机的态度</h3>
+    <table>
+      <thead><tr><th>框架</th><th>是否状态机</th><th>调度模型</th><th>特点</th></tr></thead>
+      <tbody>
+        <tr><td class="pri"><strong>LangGraph</strong></td><td class="ok">显式状态图</td><td>StateGraph + 节点 + 边</td><td>可视化、可回滚、可持久化 checkpoint</td></tr>
+        <tr><td><strong>AutoGen</strong></td><td class="warn">隐式状态机</td><td>GroupChat + Speaker Selector</td><td>对话式协作，更灵活但难调试</td></tr>
+        <tr><td><strong>CrewAI</strong></td><td>流程式</td><td>Process: sequential / hierarchical</td><td>最简单，但表达能力有限</td></tr>
+        <tr><td><strong>OpenAI Agents SDK</strong></td><td>转移式</td><td>Handoffs + Tracing</td><td>Agent 之间直接 handoff，类似接力</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="sub">三种调度模式</h3>
+
+    <h3 class="sub small">① 中心化（Supervisor）</h3>
+    <p>一个 Manager 智能体调度 N 个 Specialist。对齐 LangChain RouterChain、CrewAI Manager、AutoGen GroupChatManager。</p>
+    <pre><code>       ┌──────────────┐
+       │  Supervisor  │   ← 只判断意图，不干活
+       └──────┬───────┘
+              ↓ 路由
+       ┌──────┼──────┬──────┐
+       ▼      ▼      ▼      ▼
+     Spec1  Spec2  Spec3  Spec4</code></pre>
+
+    <h3 class="sub small">② 去中心化（Peer-to-Peer / Handoff）</h3>
+    <p>Agent 之间直接 handoff，无中心调度。对齐 OpenAI Agents SDK 的 Handoffs、AutoGen 的 free-form conversation。</p>
+    <pre><code>   AgentA ──handoff──▶ AgentB ──handoff──▶ AgentC
+   （用户问 A，A 觉得是 B 的事，转给 B，B 干完再转 C）</code></pre>
+
+    <h3 class="sub small">③ 分层式（Hierarchical）</h3>
+    <p>多层 Supervisor，每层管一段。对齐企业组织架构。适合超大规模（10+ Agent）。</p>
+    <pre><code>          Top Supervisor
+          /     |     \
+       Sup1   Sup2   Sup3
+       /\     /\     /\
+      A B    C D    E F</code></pre>
+
+    <h3 class="sub">状态机到底解决什么问题</h3>
+    <ul>
+      <li><strong>可视化</strong>：流程图可以画出来，团队对齐有共同语言</li>
+      <li><strong>可调试</strong>：每个节点的输入输出有 schema，能单步调试</li>
+      <li><strong>可回滚</strong>：checkpoint 机制，失败可重放到某节点（LangGraph 的核心卖点）</li>
+      <li><strong>条件分支 / 循环</strong>：天然支持，不用 if/else 在 prompt 里硬写</li>
+      <li><strong>持久化</strong>：长任务（多小时）可以中断、恢复、迁移</li>
+    </ul>
+
+    <h3 class="sub">何时该用状态机</h3>
+    <table>
+      <thead><tr><th>场景</th><th>推荐</th><th>理由</th></tr></thead>
+      <tbody>
+        <tr><td>固定流程（审核、编排、SOP）</td><td class="ok">显式状态图</td><td>流程稳定，状态机能可视化、可审计</td></tr>
+        <tr><td>开放式对话（客服、研究）</td><td class="warn">隐式 / 自由对话</td><td>流程不可预测，状态机会变成约束</td></tr>
+        <tr><td>长任务（需要中断恢复）</td><td class="ok">必须用状态机</td><td>checkpoint 是刚需</td></tr>
+        <tr><td>简单工具调用</td><td>不需要</td><td>直接 ReAct 即可，加状态机过度工程</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout note">
+      <span class="title"><span class="icon">◆</span>LangGraph 的状态设计</span>
+      LangGraph 的核心抽象是 <strong>StateGraph</strong>：节点是函数 <code>(State) → State</code>，边是条件转移。State 是 TypedDict，标量字段覆盖更新，<code>Annotated[list, add]</code> 字段累加追加。这个设计让"状态流转"变得显式、可观测、可持久化。
+    </div>
+
+    <div class="callout tip">
+      <span class="title"><span class="icon">✓</span>业界共识</span>
+      <strong>从单 Agent 开始</strong>。2026 年 multi-agent 工程化门槛已经很低，但良好的架构设计和清晰的 Agent 职责划分，依然是决定系统成败的核心因素。<strong>不要为了多智能体而多智能体</strong>。识别瓶颈后再拆分。
+    </div>
+  </div>
+
+  <!-- 问题 5 -->
+  <div class="section" id="q5">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <div class="section-title">AI Agent 的质量如何评估</div>
+      <span class="section-tag">Evaluation</span>
+    </div>
+
+    <p><strong>问题：</strong>Agent 不是确定性的，怎么评估好坏？指标有哪些？怎么搭评测体系？</p>
+
+    <h3 class="sub">五位一体方法论（Anthropic 2026）</h3>
+    <div class="flow">
+      <div class="node primary">目标</div>
+      <span class="arrow">→</span>
+      <div class="node primary">指标</div>
+      <span class="arrow">→</span>
+      <div class="node primary">场景</div>
+      <span class="arrow">→</span>
+      <div class="node primary">工具</div>
+      <span class="arrow">→</span>
+      <div class="node success">迭代</div>
+    </div>
+
+    <table>
+      <thead><tr><th>维度</th><th>说明</th><th>例子</th></tr></thead>
+      <tbody>
+        <tr><td><strong>目标</strong></td><td>业务想达成什么</td><td>"用户问题 80% 一次解决"</td></tr>
+        <tr><td><strong>指标</strong></td><td>可量化的判断标准</td><td>任务完成率、token 消耗、延迟</td></tr>
+        <tr><td><strong>场景</strong></td><td>测试集分类</td><td>golden set / 对抗集 / 长尾集</td></tr>
+        <tr><td><strong>工具</strong></td><td>评估方法</td><td>LLM-as-judge / 人工 / A/B</td></tr>
+        <tr><td><strong>迭代</strong></td><td>反馈闭环</td><td>失败 case 进 golden set，回归测试</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="sub">核心指标体系</h3>
+    <table>
+      <thead><tr><th>类别</th><th>指标</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="3" class="pri"><strong>效果</strong></td><td>任务完成率</td><td>用户标注 / 业务信号反推</td></tr>
+        <tr><td>工具调用准确率</td><td>选对工具 / 参数正确率</td></tr>
+        <tr><td>幻觉率</td><td>编造不存在的工具 / 参数 / 事实</td></tr>
+        <tr><td rowspan="2"><strong>效率</strong></td><td>token 消耗</td><td>每次任务平均 token</td></tr>
+        <tr><td>延迟</td><td>P50 / P95 / P99 端到端时延</td></tr>
+        <tr><td rowspan="2"><strong>安全</strong></td><td>越狱率</td><td>prompt injection 成功率</td></tr>
+        <tr><td>敏感数据泄露</td><td>PII 进日志 / 进 prompt 的频率</td></tr>
+        <tr><td rowspan="2"><strong>体验</strong></td><td>用户满意度</td><td>点赞 / 投诉比</td></tr>
+        <tr><td>平均轮次</td><td>解决问题需要的对话轮数</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="sub">三层评估</h3>
+    <ol>
+      <li><strong>在线评估（生产）</strong>：用户反馈（点赞 / 重试 / 中途放弃）+ 隐式信号（用户是否复述同样问题）</li>
+      <li><strong>离线评估（测试）</strong>：golden set 跑分，每次发版回归。重点是不退化</li>
+      <li><strong>单元评估（单 step）</strong>：每个 step 单独评估，定位是哪个环节出错。对齐软件工程的单元测试</li>
+    </ol>
+
+    <h3 class="sub">评估方法对比</h3>
+    <table>
+      <thead><tr><th>方法</th><th>成本</th><th>覆盖</th><th>适用</th></tr></thead>
+      <tbody>
+        <tr><td>人工标注</td><td class="no">高</td><td class="ok">小样本精评</td><td>golden set 构建、关键指标</td></tr>
+        <tr><td>LLM-as-judge</td><td class="ok">低</td><td class="warn">大规模但有偏差</td><td>批量评估、初筛</td></tr>
+        <tr><td>规则校验</td><td class="ok">极低</td><td class="no">只能验硬性</td><td>schema / 工具名 / 必填字段</td></tr>
+        <tr><td>A/B test</td><td class="warn">中</td><td class="ok">真实分布</td><td>发版前最后一步</td></tr>
+        <tr><td>用户反馈</td><td class="ok">低</td><td class="warn">有偏</td><td>持续监控</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="sub">主流评估框架（2026）</h3>
+    <table>
+      <thead><tr><th>框架</th><th>定位</th><th>特点</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Ragas</strong></td><td>RAG 专用</td><td>faithfulness / answer_relevancy / context_precision / context_recall 四指标</td></tr>
+        <tr><td><strong>Langfuse Evaluations</strong></td><td>集成可观测</td><td>在线评估 + 离线评估一体</td></tr>
+        <tr><td><strong>Braintrust</strong></td><td>评估导向</td><td>实验对比、A/B、版本管理</td></tr>
+        <tr><td><strong>DeepEval</strong></td><td>单元测试风格</td><td>类 pytest，集成 CI 友好</td></tr>
+        <tr><td><strong>Inspect AI</strong></td><td>学术 / 安全</td><td>UK AISI 出品，偏向能力 / 安全评估</td></tr>
+        <tr><td><strong>Arize Phoenix</strong></td><td>OpenTelemetry 标准</td><td>和可观测深度集成</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <span class="title"><span class="icon">✓</span>实践建议</span>
+      <strong>先把 golden set 建起来</strong>。50-100 条人工标注的代表性 case，比 1 万条 LLM 自动评估有价值得多。每次发版跑一遍，不退化就发版。这是工程上最低成本最高收益的做法。
+    </div>
+  </div>
+
+  <!-- 问题 6 -->
+  <div class="section" id="q6">
+    <div class="section-header">
+      <div class="section-num purple">6</div>
+      <div class="section-title">Hook 机制</div>
+      <span class="section-tag">Event-driven</span>
+    </div>
+
+    <p><strong>问题：</strong>Hook 机制是什么？怎么用？业界有哪些做法？</p>
+
+    <p>Hook 是<span class="em">事件驱动的回调</span>：在 Agent 生命周期的关键节点（工具调用前 / 后、用户提交、停止等）触发外部脚本或函数。它的核心价值是把<strong>横切关注点</strong>（审计、安全、自动化、可观测）从主流程剥离。</p>
+
+    <h3 class="sub">Claude Code 的六类 Hook（2026）</h3>
+    <table>
+      <thead><tr><th>Hook 类型</th><th>触发时机</th><th>典型用途</th><th>能否拦截</th></tr></thead>
+      <tbody>
+        <tr><td class="pri"><strong>PreToolUse</strong></td><td>工具执行前</td><td>拦截危险命令、参数改写、权限校验</td><td class="ok">能（返回非零退出码阻止）</td></tr>
+        <tr><td class="pri"><strong>PostToolUse</strong></td><td>工具执行后</td><td>自动 lint / 测试、审计日志、结果改写</td><td>不能拦截，可改结果</td></tr>
+        <tr><td><strong>UserPromptSubmit</strong></td><td>用户提交消息前</td><td>提示词注入检测、敏感词过滤、上下文注入</td><td class="ok">能</td></tr>
+        <tr><td><strong>Stop</strong></td><td>Agent 想停止时</td><td>检查任务是否真的完成，强制继续</td><td class="ok">能（阻止停止）</td></tr>
+        <tr><td><strong>Notification</strong></td><td>需要通知用户时</td><td>桌面通知、邮件、IM 推送</td><td>—</td></tr>
+        <tr><td><strong>SubagentStop</strong></td><td>子 Agent 停止时</td><td>子任务结果校验、聚合</td><td class="ok">能</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="sub">配置示例</h3>
+    <pre><code><span class="com"># Claude Code 配置：git commit 前自动跑 lint + test</span>
+hooks:
+  pretool_use:
+    - if: tool.name == <span class="str">"bash"</span> and tool.args matches <span class="str">"git commit.*"</span>
+      run: |
+        npm run lint
+        npm run test
+      feedback: <span class="kw">true</span>   <span class="com"># 把结果反馈给模型</span>
+      blocking: <span class="kw">true</span>  <span class="com"># 失败则阻止 commit</span>
+
+  posttool_use:
+    - if: tool.name == <span class="str">"edit"</span>
+      run: <span class="str">"~/.claude/hooks/auto-format.sh"</span>
+      feedback: <span class="kw">false</span>  <span class="com"># 后台静默执行</span></code></pre>
+
+    <h3 class="sub">业界其他实现</h3>
+    <table>
+      <thead><tr><th>框架</th><th>Hook 名称</th><th>事件</th></tr></thead>
+      <tbody>
+        <tr><td><strong>LangChain</strong></td><td>Callbacks</td><td><code>on_llm_start</code> / <code>on_llm_end</code> / <code>on_tool_start</code> / <code>on_tool_end</code> / <code>on_chain_end</code> / <code>on_error</code></td></tr>
+        <tr><td><strong>LangGraph</strong></td><td>Callbacks</td><td>继承 LangChain，额外有节点级 <code>on_graph_start</code> / <code>on_graph_end</code></td></tr>
+        <tr><td><strong>OpenAI Agents SDK</strong></td><td>Tracing hooks</td><td><code>trace_start</code> / <code>trace_end</code> / <code>span_start</code> / <code>span_end</code></td></tr>
+        <tr><td><strong>LlamaIndex</strong></td><td>Callbacks</td><td>类似 LangChain</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="sub">设计原则</h3>
+    <ul>
+      <li><strong>非阻塞优先</strong>：能 async 就 async，主流程不等 hook。PreToolUse 例外（要拿到结果决定是否继续）</li>
+      <li><strong>轻量级</strong>：单个 hook 应 < 100ms，重的活儿异步推队列</li>
+      <li><strong>可失败</strong>：hook 抛异常不应阻塞主流程（PostToolUse 例外：审计 hook 失败要有告警）</li>
+      <li><strong>幂等</strong>：同一事件可能触发多次（重试），hook 必须幂等，避免重复副作用</li>
+      <li><strong>显式声明</strong>：配置文件而不是代码里硬编码，方便审计和团队协作</li>
+    </ul>
+
+    <h3 class="sub">Hook 的核心用途</h3>
+    <div class="cols-2">
+      <div>
+        <h3 class="sub small">审计与安全</h3>
+        <ul>
+          <li>PreToolUse 拦截危险命令（<code>rm -rf /</code>）</li>
+          <li>PostToolUse 记录审计日志</li>
+          <li>UserPromptSubmit 检测 prompt injection</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="sub small">自动化</h3>
+        <ul>
+          <li>PostToolUse 自动 lint / format / 测试</li>
+          <li>Stop 检查任务完整性</li>
+          <li>Notification 推送结果</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout purple">
+      <span class="title"><span class="icon">◆</span>Hook vs Middleware</span>
+      <strong>Hook 是事件驱动</strong>（被动触发），<strong>Middleware 是管道式</strong>（主动包裹）。Hook 适合"我不关心主流程，只关心某个事件"的场景；Middleware 适合"我要改请求 / 响应本身"的场景。两者互补，不要混用。
+    </div>
+  </div>
+
+  <!-- 问题 7 -->
+  <div class="section" id="q7">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <div class="section-title">审计与可观测性</div>
+      <span class="section-tag">Observability</span>
+    </div>
+
+    <p><strong>问题：</strong>Agent 是黑盒，怎么知道它干了什么？怎么审计？怎么观测？</p>
+
+    <div class="callout warn">
+      <span class="title"><span class="icon">!</span>为什么传统 APM 不够</span>
+      传统 APM（New Relic / Datadog）追踪的是函数调用 / HTTP 请求，对 Agent 的"黑盒推理"无能为力——你不知道 Agent 为什么调了某个工具、为什么选了某个参数。Agent 可观测必须把<strong>推理过程本身</strong>作为一等公民。
+    </div>
+
+    <h3 class="sub">三支柱（Three Pillars，从 APM 延伸）</h3>
+    <table>
+      <thead><tr><th>支柱</th><th>是什么</th><th>Agent 场景的具体内容</th></tr></thead>
+      <tbody>
+        <tr><td class="pri"><strong>Traces</strong></td><td>链路追踪</td><td>每次 LLM 调用、tool call、subagent 调用的链路，含 prompt / response / token / latency</td></tr>
+        <tr><td class="pri"><strong>Metrics</strong></td><td>聚合指标</td><td>token 消耗、调用次数、成功率、P95 延迟、成本</td></tr>
+        <tr><td class="pri"><strong>Logs</strong></td><td>结构化日志</td><td>结构化 JSON 日志，含 trace_id / user_id / session_id</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="sub">Traces 的层级结构</h3>
+    <pre><code>trace（一次用户请求）
+├── span: router_agent（意图识别）
+│   └── span: llm_call（DeepSeek, 200 tokens, 0.8s）
+├── span: strategy_config_agent（参数生成）
+│   └── span: llm_call（DeepSeek, 1500 tokens, 2.1s）
+├── span: verify_action（Pydantic 校验）
+├── span: execute_action（工具执行）
+│   ├── span: tool: add_strategy
+│   └── span: tool: persist_runtime
+└── span: response_format</code></pre>
+
+    <h3 class="sub">主流可观测平台对比（2026）</h3>
+    <table>
+      <thead><tr><th>平台</th><th>定位</th><th>开源</th><th>特点</th></tr></thead>
+      <tbody>
+        <tr><td class="pri"><strong>Langfuse</strong></td><td>Agent 专用</td><td class="ok">是（自托管）</td><td>最流行，tracing + eval + prompt management 一体</td></tr>
+        <tr><td><strong>LangSmith</strong></td><td>LangChain 官方</td><td class="no">否</td><td>和 LangChain 闭环最好，但锁定</td></tr>
+        <tr><td><strong>Braintrust</strong></td><td>评估导向</td><td class="no">否</td><td>评估 + 实验对比是强项</td></tr>
+        <tr><td><strong>Arize Phoenix</strong></td><td>OpenTelemetry 标准</td><td class="ok">是</td><td>和 OTel 生态无缝，跨语言</td></tr>
+        <tr><td><strong>OpenLLMetry</strong></td><td>OTel 标准</td><td class="ok">是</td><td>纯 tracing，集成现有 APM</td></tr>
+        <tr><td><strong>Helicone</strong></td><td>LLM 网关 + 可观测</td><td class="no">否</td><td>代理模式，零代码改动</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="sub">关键设计要点</h3>
+    <ul>
+      <li><strong>Trace ID 贯穿</strong>：从用户请求到响应，所有 span 共享一个 trace_id，能串联日志、指标、trace</li>
+      <li><strong>采样策略</strong>：正常 1% 全量记录（含 prompt/response），异常 / 失败 100% 记录。Anthropic 内部就是这么做的</li>
+      <li><strong>PII 脱敏</strong>：prompt 里可能有用户隐私（身份证 / 手机），落库前必须脱敏</li>
+      <li><strong>成本归因</strong>：每个 Agent / 每次调用烧了多少 token / 多少钱，要能下钻</li>
+      <li><strong>多模态</strong>：图片 / 音频 trace 要能存原文件或 URL，不能只存文本</li>
+      <li><strong>实时告警</strong>：失败率突增、token 消耗异常、延迟 P99 飙升 → 自动告警</li>
+    </ul>
+
+    <h3 class="sub">审计 vs 可观测</h3>
+    <table>
+      <thead><tr><th>维度</th><th>可观测（Observability）</th><th>审计（Audit）</th></tr></thead>
+      <tbody>
+        <tr><td>目标</td><td>实时了解系统状态</td><td>事后追溯谁做了什么</td></tr>
+        <tr><td>面向</td><td>运维 / SRE</td><td>合规 / 安全 / 法务</td></tr>
+        <tr><td>数据</td><td>聚合、采样、指标化</td><td>详尽、不采样、可追溯</td></tr>
+        <tr><td>保留期</td><td>短期（7-30 天）</td><td>长期（1-7 年，合规要求）</td></tr>
+        <tr><td>格式</td><td>结构化 JSON / OpenTelemetry</td><td>统一前缀日志（如 <code>[审计] 类别:动作</code>）</td></tr>
+        <tr><td>读操作</td><td>记</td><td class="warn">不记（避免日志爆炸，参考 K8s audit log）</td></tr>
+        <tr><td>写操作</td><td>记</td><td class="ok">必记，含失败路径</td></tr>
+        <tr><td>敏感信息</td><td>采样脱敏</td><td class="no">绝不记录（API key / 密码明文）</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout note">
+      <span class="title"><span class="icon">◆</span>OpenTelemetry 标准</span>
+      2026 年趋势：Agent 可观测正在向 <strong>OpenTelemetry (OTel)</strong> 标准靠拢。Arize Phoenix、OpenLLMetry 都基于 OTel，好处是可以和现有 APM（Datadog / Jaeger / Tempo）无缝集成。Langfuse 也支持 OTel 协议导入。
+    </div>
+  </div>
+
+  <!-- 问题 8 -->
+  <div class="section" id="q8">
+    <div class="section-header">
+      <div class="section-num purple">8</div>
+      <div class="section-title">知识库系统（RAG）</div>
+      <span class="section-tag">Knowledge Base</span>
+    </div>
+
+    <p><strong>问题：</strong>Agent 怎么接知识库？RAG 怎么做到生产可用？</p>
+
+    <div class="callout warn">
+      <span class="title"><span class="icon">!</span>原型 ≠ 生产</span>
+      <code>chunk → embed → cosine → stuff into prompt</code> 永远是原型，不是生产系统。2026 年生产级 RAG 完全不同。
+    </div>
+
+    <h3 class="sub">RAG 演进路径</h3>
+    <table>
+      <thead><tr><th>代际</th><th>名称</th><th>核心</th><th>问题</th></tr></thead>
+      <tbody>
+        <tr><td>1.0</td><td><strong>Naive RAG</strong></td><td>chunk + embed + cosine</td><td>召回噪声大、无 reranking</td></tr>
+        <tr><td>2.0</td><td><strong>Advanced RAG</strong></td><td>+ query 改写、HyDE、multi-query、reranking</td><td>工程复杂、链路长</td></tr>
+        <tr><td>3.0</td><td><strong>Modular RAG</strong></td><td>Retrieve-Rerank-Generate 解耦，可插拔</td><td>组件选型难</td></tr>
+        <tr><td>4.0</td><td><strong>GraphRAG</strong></td><td>知识图谱 + 向量，实体关系显式</td><td>构建成本高</td></tr>
+        <tr><td>5.0</td><td><strong>Vectorless RAG</strong></td><td>抛弃向量，LLM 直接对文档结构推理</td><td>token 消耗大</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="sub">生产级 RAG 关键组件</h3>
+    <div class="flow">
+      <div class="node">文档摄入</div>
+      <span class="arrow">→</span>
+      <div class="node primary">Chunking<br><small>分块策略</small></div>
+      <span class="arrow">→</span>
+      <div class="node primary">Embedding<br><small>向量化</small></div>
+      <span class="arrow">→</span>
+      <div class="node primary">向量库</div>
+      <span class="arrow">→</span>
+      <div class="node">检索</div>
+      <span class="arrow">→</span>
+      <div class="node primary">Reranker<br><small>重排</small></div>
+      <span class="arrow">→</span>
+      <div class="node success">生成</div>
+    </div>
+
+    <h3 class="sub">各组件选型</h3>
+
+    <h3 class="sub small">Chunking（分块）</h3>
+    <ul>
+      <li><strong>固定大小</strong>：512-1024 token，简单但可能切断语义</li>
+      <li><strong>语义分块</strong>：按句子 / 段落，保留语义完整</li>
+      <li><strong>父子分块</strong>：小块召回，大块返回（避免上下文不足）</li>
+      <li><strong>层级分块</strong>：章节 / 段落 / 句子多层，可按需取不同粒度</li>
+      <li><strong>Markdown / Code aware</strong>：按标题 / 函数边界切，结构信息保留</li>
+    </ul>
+
+    <h3 class="sub small">向量库</h3>
+    <table>
+      <thead><tr><th>方案</th><th>类型</th><th>适用</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Pinecone</strong></td><td>SaaS</td><td>开箱即用，零运维</td></tr>
+        <tr><td><strong>Weaviate</strong></td><td>开源 / SaaS</td><td>支持 hybrid search</td></tr>
+        <tr><td><strong>Milvus</strong></td><td>开源</td><td>大规模、国产</td></tr>
+        <tr><td><strong>Qdrant</strong></td><td>开源</td><td>Rust 写的，性能好</td></tr>
+        <tr><td><strong>pgvector</strong></td><td>PG 扩展</td><td>已有 PG 时最省事</td></tr>
+        <tr><td><strong>Chroma</strong></td><td>开源</td><td>本地开发、原型</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="sub small">检索增强技术</h3>
+    <ul>
+      <li><strong>Query 改写</strong>：用户问题 → LLM 改写成更利于检索的 query</li>
+      <li><strong>HyDE</strong>：Hypothetical Document Embeddings，先让 LLM 编答案再检索（提升召回）</li>
+      <li><strong>Multi-query</strong>：LLM 生成 N 个变体 query，并行检索后合并去重</li>
+      <li><strong>Reranking</strong>：Cohere Rerank / bge-reranker，对召回结果二次排序，提升精度</li>
+      <li><strong>Hybrid Search</strong>：BM25（关键词）+ Vector（语义）融合，取长补短</li>
+      <li><strong>Hybrid + RRF</strong>：Reciprocal Rank Fusion 融合两路结果</li>
+    </ul>
+
+    <h3 class="sub">评估闭环（Ragas 四指标）</h3>
+    <table>
+      <thead><tr><th>指标</th><th>衡量什么</th><th>理想值</th></tr></thead>
+      <tbody>
+        <tr><td class="pri"><strong>faithfulness</strong></td><td>答案是否忠于检索内容（不幻觉）</td><td>&gt; 0.9</td></tr>
+        <tr><td class="pri"><strong>answer_relevancy</strong></td><td>答案是否切题</td><td>&gt; 0.85</td></tr>
+        <tr><td class="pri"><strong>context_precision</strong></td><td>检索的内容有多少被用上</td><td>&gt; 0.7</td></tr>
+        <tr><td class="pri"><strong>context_recall</strong></td><td>应该检索到的是否都检索到了</td><td>&gt; 0.8</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="sub">生产要点</h3>
+    <ul>
+      <li><strong>增量更新</strong>：文档变更只重新 embed 受影响的 chunk，避免全量重建</li>
+      <li><strong>多租户隔离</strong>：不同用户 / 团队的知识库要隔离，权限不能串</li>
+      <li><strong>失败模式监控</strong>：检索为空（召回 0 条）、检索噪声（top-1 不相关）都要监控</li>
+      <li><strong>缓存</strong>：相同 query 缓存 embedding 结果 + 检索结果，省成本</li>
+      <li><strong>引用追溯</strong>：答案要标出引用了哪些 chunk，便于核验（必做）</li>
+      <li><strong>文档版本化</strong>：知识库有版本，回滚方便</li>
+    </ul>
+
+    <div class="callout tip">
+      <span class="title"><span class="icon">✓</span>GraphRAG 适用场景</span>
+      普通向量 RAG 在"实体关系查询"上很弱（如"A 公司的 CEO 之前在哪家公司任职"）。GraphRAG 把实体和关系建成图，能做多跳推理。2026 年 Microsoft GraphRAG 是代表，但构建成本高（需要 LLM 抽实体），适合<strong>实体关系密集</strong>的领域（金融、医疗、法律）。
+    </div>
+
+    <div class="callout note">
+      <span class="title"><span class="icon">◆</span>Vectorless 趋势</span>
+      2026 年出现的新方向：<strong>Vectorless RAG</strong>。完全抛弃向量数据库，让 LLM 直接对文档结构（目录 / 标题 / 摘要）推理决定看哪段。适合文档量小（&lt;100 篇）但精度要求极高的场景。代价是 token 消耗大。
+    </div>
+  </div>
+
+  <!-- 总结 -->
+  <div class="section" id="conclusion" style="background:linear-gradient(135deg,rgba(59,130,246,.05) 0%,rgba(167,139,250,.02) 100%)">
+    <div class="section-header">
+      <div class="section-num">✓</div>
+      <div class="section-title">总结</div>
+    </div>
+
+    <table>
+      <thead><tr><th>问题</th><th>核心答案</th></tr></thead>
+      <tbody>
+        <tr><td>1. Skill 加载</td><td>三档：静态注册（&lt;10）/ 动态发现（10-50）/ RAG 检索（&gt;50）。协议化 + 权限模型 + 白名单执行</td></tr>
+        <tr><td>2. Claude 官方</td><td>七件套：Skills / MCP / Commands / Hooks / Subagents / CLAUDE.md / Plugins。Markdown 即 skill，渐进式披露是核心哲学</td></tr>
+        <tr><td>3. 80-100 规模</td><td>三层路由：L1 意图分类 + L2 RAG 工具检索（top-K=5~10）+ L3 Pydantic + 白名单。临界点 10 / 50</td></tr>
+        <tr><td>4. 多智能体调度</td><td>LangGraph 显式状态图 / AutoGen 隐式 / CrewAI 流程式 / OpenAI Handoff。状态机适合固定流程 + 长任务，自由对话用隐式</td></tr>
+        <tr><td>5. 质量评估</td><td>五位一体：目标-指标-场景-工具-迭代。三层：在线 / 离线 golden set / 单元。Ragas / Langfuse / Braintrust</td></tr>
+        <tr><td>6. Hook 机制</td><td>六类：PreToolUse / PostToolUse / UserPromptSubmit / Stop / Notification / SubagentStop。非阻塞 + 轻量 + 幂等</td></tr>
+        <tr><td>7. 审计可观测</td><td>三支柱：Traces / Metrics / Logs。Langfuse 最流行，OpenTelemetry 是 2026 趋势。审计 ≠ 可观测：前者事后合规，后者实时运维</td></tr>
+        <tr><td>8. 知识库</td><td>RAG 五代演进：Naive → Advanced → Modular → GraphRAG → Vectorless。Ragas 四指标评估闭环</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip" style="margin-top:18px">
+      <span class="title"><span class="icon">✓</span>整体判断</span>
+      2026 年 AI Agent 已从"概念很热"走到"工程化阶段"。<strong>可观测性</strong>成为独立的工程学科，<strong>评估</strong>从辅助变成主流程，<strong>多智能体</strong>从噱头变成实用工具。<br>
+      <strong>核心趋势</strong>：协议化（MCP / OTel）、渐进式披露（Claude Skills）、状态机回归（LangGraph）、评估闭环（Ragas / Langfuse）。<br>
+      <strong>陷阱</strong>：不要为了新技术而新技术。从单 Agent + 静态注册 + golden set 起步，遇到瓶颈再升级。90% 的场景不需要 100 skill + RAG 检索 + 多 Agent 协作。
+    </div>
+  </div>
+
+  <div class="sources">
+    <div class="title">参考来源</div>
+    <ul>
+      <li><a href="https://blog.csdn.net/m0_60277481/article/details/162452779">拆解 AI Agent 能力架构：Tool、Skill 与 MCP 的本质与加载策略</a></li>
+      <li><a href="http://m.toutiao.com/group/7651403131300938274/">AI Agent 不是只靠调模型：8 个可复用设计模式，拆解 Claude</a></li>
+      <li><a href="https://blog.csdn.net/ll1042668699/article/details/158005930">Claude MCP 协议实战指南：30 分钟构建可扩展 AI Agent 工具链</a></li>
+      <li><a href="https://blog.csdn.net/qq_56999332/article/details/161287764">手写一个 AI 代码审查员：Claude Agent SDK + MCP 深度实战</a></li>
+      <li><a href="https://blog.csdn.net/qq_31142761/article/details/162108073">AI Agent 可观测性体系 2026 横评：Langfuse vs Braintrust</a></li>
+      <li><a href="http://m.toutiao.com/group/7638084705283244570/">Agent Evaluation：构建生产级 Agent 评测的系统方法论</a></li>
+      <li><a href="http://m.toutiao.com/group/7619599767965876774/">2026 主流 Agent 框架全景对比：LangGraph / AutoGen / CrewAI</a></li>
+      <li><a href="https://juejin.cn/post/7589958976226672650">2026 开年教程：Claude Code 七大组件</a></li>
+      <li><a href="https://juejin.cn/post/7602206323461505075">Claude Code Hooks 钩子系统详解</a></li>
+      <li><a href="https://blog.csdn.net/libaiup/article/details/157403686">LangGraph 多 Agent 系统 State 设计实战</a></li>
+      <li><a href="https://blog.csdn.net/yonggeit/article/details/161060896">Multi-Agent 系统工程 2026：从单 Agent 到协作智能体网络</a></li>
+      <li><a href="http://m.toutiao.com/group/7638611695945925174/">2026 RAG 选型指南：Vector / Graph / Vectorless 该怎么挑</a></li>
+      <li><a href="http://m.toutiao.com/group/7625104801113588224/">RAG Is Not Dead：Advanced Retrieval Patterns in 2026</a></li>
+      <li><a href="https://cloud.tencent.com/developer/article/2630012">RAG 核心工具大全：解析工具 + 向量模型 + 数据库 + 检索排序</a></li>
+    </ul>
+  </div>
+
+  <div class="footer">
+    智能体架构进阶问题解答 · 2026-07-06 · 参考 Anthropic / LangChain / LangFuse / Microsoft GraphRAG
+  </div>
+
+</div>
+
+<script>
+const sections = document.querySelectorAll('.section');
+const navLinks = document.querySelectorAll('.topnav .nav-links a');
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const id = entry.target.id;
+      navLinks.forEach(link => {
+        link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+      });
+    }
+  });
+}, { rootMargin: '-80px 0px -70% 0px' });
+sections.forEach(s => observer.observe(s));
+</script>
+
+</body>
+</html>
