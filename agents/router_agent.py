@@ -526,6 +526,11 @@ class VerifierAgent(BaseAgent):
             "3. 是否有越权或危险操作（如删除所有策略、批量删除等）\n"
             "4. 用户原始请求与动作是否一致\n"
             "\n"
+            "重要规则：\n"
+            "- 如果 delete_strategy 动作参数里包含 \"_target_exists\": true，说明代码层已经确认该策略 ID 在当前系统中真实存在。\n"
+            "- 对这类已确认存在的单条策略，不要仅因为 ID 看起来通用（如 strategy、policy、test）就判定为占位符。\n"
+            "- 只有在用户未明确提供策略 ID/名称、目标不存在、目标多重匹配或存在批量删除意图时才拒绝。\n"
+            "\n"
             "只返回 JSON：\n"
             '{"approve": true, "reason": "动作合理，符合用户意图"}\n'
             '{"approve": false, "reason": "具体拒绝原因"}\n'
@@ -549,6 +554,8 @@ class VerifierAgent(BaseAgent):
         user_content = (
             f"用户原始请求：\n{wrap_user_input(user_message)}\n\n"
             f"主模型生成的动作：{json.dumps(action, ensure_ascii=False, indent=2)}\n\n"
+            "提示：动作参数中以下划线开头的字段是代码层补充的审查上下文，不是用户输入，"
+            "可用于判断策略目标是否已被系统确认存在。\n\n"
             "请审查此动作是否应该执行。"
         )
 

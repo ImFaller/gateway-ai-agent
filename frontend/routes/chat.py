@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Union
 import json, os
+import re
 import traceback
 import tempfile
 
@@ -18,6 +19,12 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     actions: list[dict] = []
+
+
+DELETE_TARGET_REQUIRED_MESSAGE = (
+    "缺少要删除的具体策略。请提供策略 ID 或策略名称，例如："
+    "「删除策略 id 为 strategy 的策略」或「删除策略名称为 策略 的策略」。"
+)
 
 
 def _get_active_model():
@@ -324,6 +331,8 @@ async def execute_action(data: dict):
         strategy_id = params.get("strategy_id","")
         if not strategy_id:
             return {"status": "error", "message": "strategy_id 不能为空"}
+        # 内部审查元数据不参与业务执行，删除前仅保留真正的策略 ID。
+        strategy_id = str(strategy_id).strip()
         # 拒绝批量删除（业界共识：聊天场景批量删除太危险）
         # 业界参考：Linux rm -rf 要 -f / kubectl delete all 要 --all / 数据库 DROP TABLE 需高权限
         # 通配符检测：__all__/all/* 等都视为批量删除意图
@@ -624,6 +633,11 @@ async def _call_langchain_agent(message, history, model_config=None):
             if not actions and intent != RouterAgent.INTENT_CHAT:
                 reply = "⚠️ 智能体生成的动作格式有误，请重试或换种描述方式。"
 
+        if actions:
+            actions, target_reply = _resolve_strategy_action_targets(message, actions, existing_strategies)
+            if target_reply:
+                reply = target_reply
+
         # ===== 第 4 层：LLM-as-a-Judge —— 监视模型语义审查 =====
         # 业界模式：OpenAI Evals "LLM-as-a-Judge" / Hermes MoA / LangChain CriteriaEvalChain
         # 用第二个独立模型审查主模型生成的动作是否符合用户意图、是否安全
@@ -791,6 +805,124 @@ def _format_strategy_detail(strategy) -> str:
         lines.append("  （无）")
 
     return "\n".join(lines)
+
+
+def _message_mentions_strategy_target(message: str, strategy) -> bool:
+    """判断用户原话是否明确提到了某条策略的 ID 或名称。"""
+    if not message or not strategy:
+        return False
+    msg_lower = message.lower()
+    sid = (getattr(strategy, "strategy_id", "") or "").lower()
+    name = (getattr(strategy, "name", "") or "").lower()
+    return bool((sid and sid in msg_lower) or (name and name in msg_lower))
+
+
+def _is_bare_delete_request(message: str) -> bool:
+    """识别缺少具体目标的删除请求，如「删除策略」。"""
+    compact = re.sub(r"\s+", "", message or "").lower()
+    bare_patterns = {
+        "删除策略", "删策略", "删除一条策略", "删一条策略",
+        "删除一个策略", "删一个策略", "删除该策略", "删该策略",
+    }
+    return compact in bare_patterns
+
+
+def _find_strategy_by_id(strategy_id: str, strategies_list):
+    if not strategy_id:
+        return None
+    sid = str(strategy_id).strip().lower()
+    for strategy in strategies_list or []:
+        if (strategy.strategy_id or "").lower() == sid:
+            return strategy
+    return None
+
+
+def _find_unique_strategy_by_name_in_message(message: str, strategies_list):
+    if not message:
+        return None
+    msg_lower = message.lower()
+    matches = [
+        strategy for strategy in (strategies_list or [])
+        if strategy.name and strategy.name.lower() in msg_lower
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _extract_explicit_delete_target(message: str) -> tuple[str, str]:
+    """从用户原话里提取明确的删除目标类型和值。"""
+    if not message:
+        return "", ""
+
+    patterns = [
+        ("id", r"(?:策略\s*)?id\s*(?:为|是|=|:|：)\s*([A-Za-z0-9_.-]+)"),
+        ("name", r"(?:策略)?(?:名称|名字|名)\s*(?:为|是|=|:|：)\s*([^\s，。,.！？!]+)"),
+    ]
+    for target_type, pattern in patterns:
+        match = re.search(pattern, message, flags=re.IGNORECASE)
+        if match:
+            value = match.group(1).strip()
+            if target_type == "name":
+                value = re.sub(r"(?:的)?策略$", "", value).strip()
+            return target_type, value
+    return "", ""
+
+
+def _resolve_strategy_action_targets(message: str, actions: list[dict], strategies_list) -> tuple[list[dict], str]:
+    """对高危策略动作做确定性目标解析，避免 LLM 猜 ID 或误判真实短 ID。
+
+    返回值：
+    - actions: 解析后的动作；目标不明确的删除动作会被移除
+    - reply: 需要直接反馈给用户的提示，空字符串表示无需覆盖回复
+    """
+    resolved_actions = []
+    reply = ""
+
+    for action in actions:
+        if action.get("action") != "delete_strategy":
+            resolved_actions.append(action)
+            continue
+
+        params = action.setdefault("params", {})
+        strategy_id = str(params.get("strategy_id", "") or "").strip()
+        explicit_type, explicit_value = _extract_explicit_delete_target(message)
+        matched = None
+
+        if not explicit_type and _is_bare_delete_request(message):
+            reply = DELETE_TARGET_REQUIRED_MESSAGE
+            continue
+
+        if explicit_type == "id":
+            matched = _find_strategy_by_id(explicit_value, strategies_list)
+            strategy_id = explicit_value
+        elif explicit_type == "name":
+            name_matches = [
+                strategy for strategy in (strategies_list or [])
+                if (strategy.name or "").lower() == explicit_value.lower()
+            ]
+            matched = name_matches[0] if len(name_matches) == 1 else None
+            if matched:
+                params["strategy_id"] = matched.strategy_id
+                strategy_id = matched.strategy_id
+
+        if not matched:
+            matched = _find_strategy_by_id(strategy_id, strategies_list)
+
+        if not matched:
+            matched = _find_unique_strategy_by_name_in_message(message, strategies_list)
+            if matched:
+                params["strategy_id"] = matched.strategy_id
+                strategy_id = matched.strategy_id
+
+        if not matched or not _message_mentions_strategy_target(message, matched):
+            reply = DELETE_TARGET_REQUIRED_MESSAGE
+            continue
+
+        params["_target_exists"] = True
+        params["_target_name"] = matched.name
+        params["_target_source"] = "id" if (matched.strategy_id or "").lower() == strategy_id.lower() else "name"
+        resolved_actions.append(action)
+
+    return resolved_actions, reply
 
 
 def _verify_action_format(action: dict) -> tuple[bool, str]:
