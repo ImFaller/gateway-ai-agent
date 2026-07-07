@@ -61,6 +61,27 @@ th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border)}
 th{color:var(--text2);font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:500}
 td{font-size:12px}
 tbody tr:hover{background:rgba(255,255,255,.015)}
+.strategy-list-hint{display:flex;align-items:center;gap:8px;margin:2px 0 12px;padding:8px 10px;border:1px solid rgba(59,130,246,.22);border-radius:6px;background:rgba(59,130,246,.08);color:var(--text2);font-size:12px}
+.strategy-list-hint strong{color:var(--text)}
+.strategy-row{cursor:pointer}
+.strategy-row.expanded{background:rgba(59,130,246,.06)}
+.strategy-id-cell{display:flex;align-items:center;gap:8px;min-width:0;font-family:monospace}
+.strategy-expand-btn{width:22px;height:22px;border:1px solid var(--border);border-radius:6px;background:rgba(13,19,33,.9);color:var(--primary);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;transition:all .15s}
+.strategy-expand-btn:hover{border-color:var(--primary);background:rgba(59,130,246,.12)}
+.strategy-expand-btn::before{content:"\25b8";font-size:12px;line-height:1}
+.strategy-expand-btn.open::before{content:"\25be"}
+.strategy-detail-row{display:none}
+.strategy-detail-row.open{display:table-row}
+.strategy-detail-cell{background:rgba(255,255,255,.02);padding-top:0}
+.strategy-detail{display:grid;grid-template-columns:1fr;gap:16px;margin-top:12px;overflow-x:auto;padding-right:72px}
+.strategy-detail-section{min-width:0}
+.strategy-detail-title{font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text)}
+.strategy-detail-table{table-layout:auto;min-width:640px}
+.strategy-detail-table th,.strategy-detail-table td{vertical-align:top;white-space:nowrap}
+.strategy-detail-table .value-cell{white-space:normal;overflow-wrap:anywhere;line-height:1.55}
+.strategy-detail-table .param-cell{min-width:180px;max-width:320px}
+.step-param{display:block;padding:5px 7px;border:1px solid var(--border);border-radius:6px;background:rgba(13,19,33,.8);color:var(--text2);font-family:monospace;font-size:11px;line-height:1.45;white-space:normal;overflow-wrap:anywhere}
+.muted-cell{color:var(--text2)}
 
 /* Tags */
 .tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
@@ -1153,27 +1174,47 @@ async function loadStrategies() {
   const data = await fetch(API + "/strategies").then(r => r.json());
   const el = document.getElementById("strategyList");
   if (!data || data.length === 0) { el.innerHTML = '<div class="empty">暂无策略</div>'; return; }
-  let html = "<table><thead><tr><th>ID</th><th>名称</th><th>优先级</th><th>触发条件</th><th>步骤</th><th>状态</th><th>操作</th></tr></thead><tbody>";
-  data.forEach(s => {
+  let html = '<div class="strategy-list-hint"><strong>提示</strong><span>点击 ID 左侧按钮或双击策略行，可展开/收起触发条件和执行步骤详情。</span></div>';
+  html += "<table><thead><tr><th>ID</th><th>名称</th><th>优先级</th><th>触发条件</th><th>步骤</th><th>状态</th><th>操作</th></tr></thead><tbody>";
+  data.forEach((s, index) => {
     const sid = escapeHtml(s.strategy_id);
-    html += `<tr>
-      <td style="font-family:monospace">${sid}</td>
-      <td>${escapeHtml(s.name)}</td>
+    const detailId = `strategy-detail-${index}`;
+    html += `<tr class="strategy-row" data-detail-id="${detailId}" ondblclick="toggleStrategyDetail('${detailId}')">
+      <td>
+        <div class="strategy-id-cell">
+          <button class="strategy-expand-btn" type="button" aria-label="展开策略详情" onclick="toggleStrategyDetail('${detailId}', event)"></button>
+          <span>${sid}</span>
+        </div>
+      </td>
+      <td>
+        ${escapeHtml(s.name)}
+      </td>
       <td>${s.priority}</td>
       <td>${(s.triggers||[]).length}</td>
       <td>${(s.steps||[]).length}</td>
       <td><span class="tag ${s.enabled?'tag-success':'tag-warning'}">${s.enabled?"已启用":"已禁用"}</span></td>
-      <td><button class="btn btn-sm btn-danger" onclick="deleteStrategy('${encodeURIComponent(s.strategy_id)}','${encodeURIComponent(s.name || s.strategy_id)}')">删除</button></td>
+      <td><button class="btn btn-sm btn-danger" onclick="deleteStrategy('${encodeURIComponent(s.strategy_id)}','${encodeURIComponent(s.name || s.strategy_id)}', event)">删除</button></td>
     </tr>`;
-    html += `<tr><td colspan="7" style="background:rgba(255,255,255,.02)">
-      <details>
-        <summary style="cursor:pointer;color:var(--primary);font-size:12px">查看触发条件和执行步骤详情</summary>
-        ${renderStrategyDetail(s)}
-      </details>
-    </td></tr>`;
+    html += `<tr id="${detailId}" class="strategy-detail-row"><td colspan="7" class="strategy-detail-cell">${renderStrategyDetail(s)}</td></tr>`;
   });
   html += "</tbody></table>";
   el.innerHTML = html;
+}
+
+function toggleStrategyDetail(detailId, event) {
+  if (event) event.stopPropagation();
+  const detailRow = document.getElementById(detailId);
+  if (!detailRow) return;
+  const isOpen = detailRow.classList.toggle("open");
+  const strategyRow = document.querySelector(`.strategy-row[data-detail-id="${detailId}"]`);
+  if (strategyRow) {
+    strategyRow.classList.toggle("expanded", isOpen);
+    const btn = strategyRow.querySelector(".strategy-expand-btn");
+    if (btn) {
+      btn.classList.toggle("open", isOpen);
+      btn.setAttribute("aria-label", isOpen ? "收起策略详情" : "展开策略详情");
+    }
+  }
 }
 
 function escapeHtml(v) {
@@ -1187,28 +1228,28 @@ const ACTION_LABELS = {audit:"安全审计", compliance_check:"合规检查", an
 function renderStrategyDetail(strategy) {
   const triggers = strategy.triggers || [];
   const steps = strategy.steps || [];
-  let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">';
-  html += '<div><div style="font-size:12px;font-weight:600;margin-bottom:6px">触发条件</div>';
+  let html = '<div class="strategy-detail">';
+  html += '<div class="strategy-detail-section"><div class="strategy-detail-title">触发条件</div>';
   if (!triggers.length) {
     html += '<div class="empty" style="padding:12px">无触发条件</div>';
   } else {
-    html += '<table><thead><tr><th>字段</th><th>操作符</th><th>值</th></tr></thead><tbody>';
+    html += '<table class="strategy-detail-table"><thead><tr><th style="width:90px">字段</th><th style="width:90px">操作符</th><th>值</th></tr></thead><tbody>';
     triggers.forEach(t => {
       const val = Array.isArray(t.value) ? t.value.join(", ") : t.value;
-      html += `<tr><td>${FIELD_LABELS[t.field] || escapeHtml(t.field)}</td><td>${OP_LABELS[t.operator] || escapeHtml(t.operator)}</td><td style="font-family:monospace">${escapeHtml(val)}</td></tr>`;
+      html += `<tr><td>${FIELD_LABELS[t.field] || escapeHtml(t.field)}</td><td>${OP_LABELS[t.operator] || escapeHtml(t.operator)}</td><td class="value-cell" style="font-family:monospace">${escapeHtml(val)}</td></tr>`;
     });
     html += '</tbody></table>';
   }
-  html += '</div><div><div style="font-size:12px;font-weight:600;margin-bottom:6px">执行步骤</div>';
+  html += '</div><div class="strategy-detail-section"><div class="strategy-detail-title">执行步骤</div>';
   if (!steps.length) {
     html += '<div class="empty" style="padding:12px">无执行步骤</div>';
   } else {
-    html += '<table><thead><tr><th>步骤ID</th><th>Agent</th><th>动作</th><th>超时</th></tr></thead><tbody>';
+    html += '<table class="strategy-detail-table"><thead><tr><th style="width:170px">步骤ID</th><th style="width:150px">Agent</th><th style="width:110px">动作</th><th style="width:70px">超时</th><th>参数</th></tr></thead><tbody>';
     steps.forEach(st => {
-      html += `<tr><td style="font-family:monospace">${escapeHtml(st.step_id)}</td><td>${AGENT_LABELS[st.agent] || escapeHtml(st.agent)}</td><td>${ACTION_LABELS[st.action] || escapeHtml(st.action)}</td><td>${escapeHtml(st.timeout || 30)}s</td></tr>`;
-      if (st.params && Object.keys(st.params).length) {
-        html += `<tr><td colspan="4" style="font-size:11px;color:var(--text2);font-family:monospace">params: ${escapeHtml(JSON.stringify(st.params))}</td></tr>`;
-      }
+      const paramHtml = st.params && Object.keys(st.params).length
+        ? `<code class="step-param">${escapeHtml(JSON.stringify(st.params))}</code>`
+        : '<span class="muted-cell">-</span>';
+      html += `<tr><td style="font-family:monospace">${escapeHtml(st.step_id)}</td><td>${AGENT_LABELS[st.agent] || escapeHtml(st.agent)}</td><td>${ACTION_LABELS[st.action] || escapeHtml(st.action)}</td><td>${escapeHtml(st.timeout || 30)}s</td><td class="param-cell">${paramHtml}</td></tr>`;
     });
     html += '</tbody></table>';
   }
@@ -1216,7 +1257,8 @@ function renderStrategyDetail(strategy) {
   return html;
 }
 
-async function deleteStrategy(encodedStrategyId, encodedStrategyName) {
+async function deleteStrategy(encodedStrategyId, encodedStrategyName, event) {
+  if (event) event.stopPropagation();
   const strategyId = decodeURIComponent(encodedStrategyId);
   const strategyName = decodeURIComponent(encodedStrategyName || encodedStrategyId);
   if (!confirm(`确定删除策略 "${strategyName || strategyId}" 吗？\n\n删除后会进入回收站，30 天内可恢复。`)) return;
