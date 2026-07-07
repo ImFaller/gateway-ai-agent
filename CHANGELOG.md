@@ -2,6 +2,64 @@
 
 本文记录当前仓库从初始化到最新版本的关键改动，方便后来查看 GitHub 或接手项目的人理解：哪些问题已经处理、为什么这样处理、涉及哪些文件。
 
+## 2026-07-07
+
+### 本次提交 - 修复 AI 对话删除策略的目标解析
+
+提交信息：`fix: harden chat strategy delete target resolution`
+
+本次提交处理两个 AI 对话删除策略相关问题。
+
+#### 1. 真实存在的短策略 ID 被监视模型误判为占位符
+
+原问题：
+
+- 手动添加策略 `id=strategy`、`name=策略` 后，AI 对话输入“删除策略id为strategy的策略”会被监视模型拒绝。
+- 拒绝理由认为 `strategy` 像占位符或示例文本，而不是真实策略 ID。
+
+原因判断：
+
+- 代码层格式校验允许 `strategy_id=strategy`。
+- 运行时策略列表中也确实存在该 ID。
+- 拒绝来自 LLM-as-a-Judge 监视模型语义审查。
+- 监视模型之前只看到用户原话和动作 JSON，没有看到“该 ID 已由代码层确认存在”的确定性上下文。
+
+改动方式：
+
+- 在监视模型前增加删除目标解析逻辑。
+- 对真实存在且用户明确提到的策略 ID，给动作补充 `_target_exists`、`_target_name`、`_target_source` 审查上下文。
+- 调整监视模型提示词：已确认存在的单条策略 ID，不应仅因名称通用而被判定为占位符。
+
+#### 2. 用户只输入“删除策略”时不应猜测并删除某条策略
+
+原问题：
+
+- AI 对话输入“删除策略”时，模型可能猜测一个已有策略 ID 并继续执行删除。
+- 这会导致未指定 ID 或名称时误删策略。
+
+原因判断：
+
+- 子智能体 prompt 虽要求“不明确不要返回 action”，但没有代码层兜底。
+- 高危删除动作不能只依赖 LLM 自律，必须在执行前做确定性目标校验。
+
+改动方式：
+
+- 增加裸删除请求识别，例如“删除策略”“删策略”“删除一个策略”等。
+- 若用户未明确提供策略 ID 或策略名称，删除动作会被移除，并提示用户补充关键信息。
+- 支持从用户原话解析“id 为 xxx”和“名称为 xxx”。
+- 当名称唯一匹配时，自动解析为真实 `strategy_id`。
+
+涉及文件：
+
+- `frontend/routes/chat.py`
+- `agents/router_agent.py`
+- `tests/test_chat_strategy_delete_targets.py`
+
+验证：
+
+- `python -m unittest tests.test_chat_strategy_delete_targets`
+- `python -m compileall frontend\routes\chat.py agents\router_agent.py tests\test_chat_strategy_delete_targets.py`
+
 ## 2026-07-06
 
 ### `1da927c` - 建立初始项目基线
