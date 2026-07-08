@@ -15,3 +15,9 @@ env/
 *.bak
 Thumbs.db
 .DS_Store
+
+# Local report artifacts
+openai-report.html
+项目汇报报告.md
+investigate/
+.claude/
