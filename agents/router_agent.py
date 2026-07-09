@@ -195,7 +195,7 @@ class StrategyConfigAgent(BaseAgent):
             "- name: 策略名称\n"
             "- priority: 优先级（整数 1-999）\n"
             "- triggers: 触发条件列表，每个元素必须是 {\"field\": 字段, \"operator\": 运算符, \"value\": 值}\n"
-            "    field: source_ip, port, protocol, destination 等\n"
+            "    field: source_ip, dest_ip, protocol, port\n"
             "    operator: eq, ne, gt, lt, contains, in, regex, exists\n"
             "- steps: 执行步骤列表，每个元素必须是 {\"step_id\": \"唯一ID\", \"agent\": 执行者, \"action\": 动作, \"params\": {}}\n"
             "    agent: security_agent, policy_agent, monitor_agent\n"

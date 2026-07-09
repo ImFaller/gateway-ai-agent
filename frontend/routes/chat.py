@@ -1,10 +1,12 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, Union
+from typing import Optional
+from contracts.schemas import TriggerConfig
 import json, os
 import re
 import traceback
 import tempfile
+import uuid
 
 router = APIRouter(prefix="/api/v1/chat", tags=["智能体对话"])
 
@@ -19,11 +21,17 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     actions: list[dict] = []
+    trace_id: str = ""
 
 
 DELETE_TARGET_REQUIRED_MESSAGE = (
     "缺少要删除的具体策略。请提供策略 ID 或策略名称，例如："
-    "「删除策略 id 为 strategy 的策略」或「删除策略名称为 策略 的策略」。"
+    "「删除策略 id 为 web_inspect 的策略」或「删除策略名称为 Web流量审查 的策略」。"
+)
+
+ADD_DETAILS_REQUIRED_MESSAGE = (
+    "缺少要添加的具体策略配置。请提供策略 ID、名称、触发条件和执行步骤，"
+    "例如：「添加一条 SSH 防护策略，ID 为 ssh_protection，协议为 tcp 且端口为 22 时触发，执行安全审计」。"
 )
 
 
@@ -62,8 +70,56 @@ def _get_active_model():
 @router.post("", summary="与智能体对话")
 async def chat_with_agent(req: ChatRequest):
     active_model = _get_active_model()
-    result = await _call_langchain_agent(req.message, req.history, active_model)
+    trace_id = _new_chat_trace_id()
+    result = await _call_langchain_agent(req.message, req.history, active_model, trace_id=trace_id)
     return result
+
+
+def _new_chat_trace_id() -> str:
+    return "chat-" + uuid.uuid4().hex[:12]
+
+
+def _safe_audit_value(value, max_len=80):
+    text = str(value or "")
+    text = re.sub(r"\s+", "_", text.strip())
+    return text[:max_len] if text else "-"
+
+
+def _get_audit_logger():
+    try:
+        from system.app import app_state
+        return app_state.get("logger")
+    except Exception:
+        return None
+
+
+def _audit_ai(event: str, result: str = "ok", level: str = "info", trace_id: str = "",
+              intent: str = "", action: str = "", reason: str = "", target: str = "",
+              query_type: str = "", count=None):
+    """Record AI decision/operation observability without storing user prompt text."""
+    logger = _get_audit_logger()
+    if not logger:
+        return
+    parts = [
+        f"[审计] AI:{_safe_audit_value(event)}",
+        f"trace={_safe_audit_value(trace_id)}",
+        f"result={_safe_audit_value(result)}",
+    ]
+    if intent:
+        parts.append(f"intent={_safe_audit_value(intent)}")
+    if action:
+        parts.append(f"action={_safe_audit_value(action)}")
+    if query_type:
+        parts.append(f"type={_safe_audit_value(query_type)}")
+    if target:
+        parts.append(f"target={_safe_audit_value(target)}")
+    if count is not None:
+        parts.append(f"count={count}")
+    if reason:
+        parts.append(f"reason={_safe_audit_value(reason, 120)}")
+    message = " ".join(parts)
+    log_func = logger.warning if level == "warning" else logger.error if level == "error" else logger.info
+    log_func(message)
 
 
 # ===== 技能注册表 =====
@@ -78,21 +134,7 @@ async def chat_with_agent(req: ChatRequest):
 # 比直接用 list[dict] / dict 强 —— 裸 dict 等于没校验
 
 
-class TriggerCondition(BaseModel):
-    """触发条件嵌套 schema —— 对应 engine.StrategyCondition"""
-    field: str = Field(description="字段名，如 source_ip/port/protocol 等")
-    operator: str = Field(description="运算符：eq/ne/gt/lt/contains/in/regex/exists")
-    # value 支持字符串或列表：eq/ne/gt/lt/contains/regex/exists 用 str，in 用 list
-    # 例如 in 操作符：{"operator":"in","value":["http","https"]}
-    value: Union[str, list[str]] = Field(default="", description="比较值（in 操作符时传列表）")
-
-    @field_validator("operator")
-    @classmethod
-    def _validate_operator(cls, v):
-        allowed = {"eq", "ne", "gt", "lt", "contains", "in", "regex", "exists"}
-        if v not in allowed:
-            raise ValueError(f"operator 必须是 {allowed} 之一，收到 '{v}'")
-        return v
+TriggerCondition = TriggerConfig
 
 
 class StrategyStep(BaseModel):
@@ -129,8 +171,8 @@ class AddStrategyArgs(BaseModel):
     name: str = Field(description="策略名称")
     enabled: bool = Field(default=True, description="是否启用")
     priority: int = Field(default=50, ge=1, le=999, description="优先级")
-    triggers: list[TriggerCondition] = Field(default_factory=list, description="触发条件")
-    steps: list[StrategyStep] = Field(default_factory=list, description="执行步骤")
+    triggers: list[TriggerCondition] = Field(default_factory=list, min_length=1, description="触发条件")
+    steps: list[StrategyStep] = Field(default_factory=list, min_length=1, description="执行步骤")
 
 
 class DeleteStrategyArgs(BaseModel):
@@ -210,6 +252,7 @@ async def execute_action(data: dict):
     params = data.get("params", {})
     confirmed = data.get("confirmed", False)
     password = data.get("password", "")
+    trace_id = data.get("trace_id", "")
 
     def get_app():
         from system.app import app_state
@@ -225,7 +268,19 @@ async def execute_action(data: dict):
         logger.warning(f"[审计] 策略:拒绝未注册 action={action} result=fail")
         return {"status": "error", "message": f"未注册的操作: {action}"}
 
-    # 2. 权限校验（CrewAI: allow/ask/deny 模型）
+    # 2. 参数校验（无副作用，先于确认/密码；非法 AI 动作无需用户二次确认）
+    args_schema = skill["args_schema"]
+    if args_schema:
+        try:
+            validated = args_schema.model_validate(params)
+            params = validated.model_dump()
+        except Exception as e:
+            _audit_ai("参数校验", result="fail", level="warning", trace_id=trace_id, action=action, reason=str(e)[:120])
+            if logger:
+                logger.warning(f"[审计] 策略:参数校验 action={action} result=fail reason={str(e)[:120]}")
+            return {"status": "error", "message": f"参数校验失败: {str(e)[:200]}"}
+
+    # 3. 权限校验（CrewAI: allow/ask/deny 模型）
     permission = skill["permission"]
     if permission == "deny":
         logger.warning(f"[审计] 策略:禁止操作 action={action} result=fail reason=deny")
@@ -237,7 +292,7 @@ async def execute_action(data: dict):
             "permission": "ask",
         }
 
-    # 2.5 密码二次校验 —— 受保护动作（add/delete/execute_strategy）需要密码确认
+    # 4. 密码二次校验 —— 受保护动作（add/delete/execute_strategy）需要密码确认
     # 业界模式：金融/运维系统对高危操作的二次认证（2FA-like）
     # 密码每次都经 bcrypt 验证，前端 sessionStorage 缓存避免用户重复输入
     PROTECTED_ACTIONS = {"add_strategy", "delete_strategy", "execute_strategy", "restore_strategy", "update_strategy"}
@@ -251,17 +306,6 @@ async def execute_action(data: dict):
         if not PasswordStore.verify(password):
             logger.warning(f"[审计] 认证:二次确认 action={action} result=fail reason=密码错误")
             return {"status": "password_wrong", "message": "密码错误"}
-
-    # 3. 参数校验（LangChain: args_schema Pydantic 校验）
-    args_schema = skill["args_schema"]
-    if args_schema:
-        try:
-            validated = args_schema.model_validate(params)
-            params = validated.model_dump()
-        except Exception as e:
-            if logger:
-                logger.warning(f"[审计] 策略:参数校验 action={action} result=fail reason={str(e)[:120]}")
-            return {"status": "error", "message": f"参数校验失败: {str(e)[:200]}"}
 
     if action == "add_strategy":
         try:
@@ -450,6 +494,7 @@ async def execute_action(data: dict):
             if detail_target:
                 # 返回单个策略的完整详情（triggers + steps）
                 msg = _format_strategy_detail(detail_target)
+                _audit_ai("查询", trace_id=trace_id, action=action, query_type="strategy_detail", target=detail_target.strategy_id, result="ok")
                 return {"status": "ok", "message": msg}
             else:
                 # 返回系统概览
@@ -464,14 +509,16 @@ async def execute_action(data: dict):
                     names = [s.name for s in strategies_list[:10]]
                     msg += f"- 已加载策略: {', '.join(names)}\n"
                     msg += "\n💡 如需查看某条策略的详细配置，可输入「查看 ssh_protection 详情」或「SSH防护策略详情」"
+                _audit_ai("查询", trace_id=trace_id, action=action, query_type="system_status", result="ok", count=len(strategies_list))
                 return {"status": "ok", "message": msg}
         except Exception as e:
+            _audit_ai("查询", result="fail", level="warning", trace_id=trace_id, action=action, reason=str(e)[:120])
             return {"status": "ok", "message": "系统运行中（查询详情时遇到问题: " + str(e)[:60] + "）"}
 
     return {"status":"error","message":f"未知操作: {action}"}
 
 
-async def _call_langchain_agent(message, history, model_config=None):
+async def _call_langchain_agent(message, history, model_config=None, trace_id=""):
     """主从智能体架构 —— 1 主调度 + N 子智能体 + 输出校验
 
     业界模式：
@@ -528,7 +575,7 @@ async def _call_langchain_agent(message, history, model_config=None):
             from system.app import app_state
             _logger = app_state.get("logger")
             if _logger:
-                _logger.warning(f"[安全] 拦截提示词注入: matched='{matched}', input={message[:120]}")
+                _logger.warning(f"[安全] 拦截提示词注入: matched='{matched}'")
         except Exception:
             pass
         return ChatResponse(
@@ -537,12 +584,15 @@ async def _call_langchain_agent(message, history, model_config=None):
                 f"为安全考虑，本次请求已被拦截，未执行任何操作。\n"
                 f"如果您确实需要进行添加/删除策略等操作，请去掉注入性话术后再发送。"
             ),
-            actions=[]
+            actions=[],
+            trace_id=trace_id,
         )
 
     # 无模型配置时的模拟回复
     if not model_config or not model_config.get("api_key"):
-        return _simulate_chat(message, history)
+        simulated = _simulate_chat(message, history)
+        simulated.trace_id = trace_id
+        return simulated
 
     try:
         # ===== 第 1 层：主智能体识别意图 =====
@@ -557,6 +607,7 @@ async def _call_langchain_agent(message, history, model_config=None):
         reply = route_result.get("reply", "正在处理...")
 
         print(f"[主智能体] 意图: {intent}, 回复: {reply}")
+        _audit_ai("意图识别", trace_id=trace_id, intent=intent, result="ok")
 
         # ===== 第 2 层：路由到子智能体 =====
         actions = []
@@ -583,6 +634,7 @@ async def _call_langchain_agent(message, history, model_config=None):
                     reply = raw.strip()
                 else:
                     reply = reply or "未能识别具体的策略操作"
+                _audit_ai("动作生成", result="no_action", level="warning", trace_id=trace_id, intent=intent, reason="语义模糊或模型主动拒绝")
 
         elif intent == RouterAgent.INTENT_QUERY:
             # 策略查询子智能体（不需要 LLM，直接返回动作）
@@ -601,6 +653,8 @@ async def _call_langchain_agent(message, history, model_config=None):
             print(f"[策略执行子智能体] 生成动作: {actions}")
             if actions:
                 reply = "正在执行策略编排..."
+            else:
+                _audit_ai("动作生成", result="no_action", level="warning", trace_id=trace_id, intent=intent, reason="语义模糊或参数不足")
 
         elif intent == RouterAgent.INTENT_RESTORE:
             # 策略恢复子智能体（从回收站恢复）
@@ -611,6 +665,8 @@ async def _call_langchain_agent(message, history, model_config=None):
             print(f"[策略恢复子智能体] 生成动作: {actions}")
             if actions:
                 reply = "正在恢复策略..."
+            else:
+                _audit_ai("动作生成", result="no_action", level="warning", trace_id=trace_id, intent=intent, reason="语义模糊或无法匹配回收站")
 
         else:
             # INTENT_CHAT：普通对话，直接用主智能体的回复
@@ -622,40 +678,50 @@ async def _call_langchain_agent(message, history, model_config=None):
         # 校验失败的动作被剔除，不让下游 execute-action 处理坏数据
         if actions:
             verified_actions = []
+            add_details_missing = False
             for act in actions:
                 ok, err = _verify_action_format(act)
                 if ok:
                     verified_actions.append(act)
                 else:
                     print(f"[Verifier] 剔除格式不合法的动作: {act}，原因: {err}")
+                    _audit_ai("动作校验", result="fail", level="warning", trace_id=trace_id, intent=intent, action=act.get("action", ""), reason=err)
+                    if _is_add_strategy_details_missing(act, err):
+                        add_details_missing = True
             actions = verified_actions
             # 如果校验后动作全被剔除，提示用户
             if not actions and intent != RouterAgent.INTENT_CHAT:
-                reply = "⚠️ 智能体生成的动作格式有误，请重试或换种描述方式。"
+                reply = ADD_DETAILS_REQUIRED_MESSAGE if add_details_missing else "⚠️ 智能体生成的动作格式有误，请重试或换种描述方式。"
 
         if actions:
+            before_target_actions = [a.get("action", "") for a in actions]
             actions, target_reply = _resolve_strategy_action_targets(message, actions, existing_strategies)
             if target_reply:
                 reply = target_reply
+                removed_actions = [a for a in before_target_actions if a not in [x.get("action", "") for x in actions]]
+                audit_action = removed_actions[0] if removed_actions else "strategy_action"
+                _audit_ai("目标解析", result="fail", level="warning", trace_id=trace_id, intent=intent, action=audit_action, reason="目标或配置不明确")
 
         # ===== 第 4 层：LLM-as-a-Judge —— 监视模型语义审查 =====
         # 业界模式：OpenAI Evals "LLM-as-a-Judge" / Hermes MoA / LangChain CriteriaEvalChain
         # 用第二个独立模型审查主模型生成的动作是否符合用户意图、是否安全
         # 与第 3 层 Hermes Verifier 的区别：第 3 层看"格式"，第 4 层看"语义"
         if actions:
-            actions, judge_reply = await _run_llm_judge(message, actions, intent)
+            actions, judge_reply = await _run_llm_judge(message, actions, intent, trace_id=trace_id)
             if judge_reply:
                 # 监视模型有意见要反馈给用户
                 reply = judge_reply if not actions else reply + "\n\n" + judge_reply
 
-        return ChatResponse(reply=reply, actions=actions)
+        return ChatResponse(reply=reply, actions=actions, trace_id=trace_id)
 
     except Exception as e:
         error_detail = traceback.format_exc()
         print(f"[主从智能体] 异常: {error_detail}")
+        _audit_ai("对话异常", result="fail", level="error", trace_id=trace_id, reason=str(e)[:120])
         return ChatResponse(
             reply=f"调用大模型失败: {str(e)}\n\n请检查模型配置是否正确。",
-            actions=[]
+            actions=[],
+            trace_id=trace_id,
         )
 
 
@@ -827,6 +893,34 @@ def _is_bare_delete_request(message: str) -> bool:
     return compact in bare_patterns
 
 
+def _is_bare_add_request(message: str) -> bool:
+    """识别缺少具体配置的新增请求，如「添加策略」。"""
+    compact = re.sub(r"\s+", "", message or "").lower()
+    bare_patterns = {
+        "添加策略", "新增策略", "增加策略", "新建策略", "创建策略",
+        "加策略", "添加一条策略", "新增一条策略", "增加一条策略", "新建一条策略",
+        "创建一条策略", "添加一个策略", "新增一个策略", "增加一个策略", "新建一个策略",
+        "创建一个策略",
+    }
+    return compact in bare_patterns or bool(re.fullmatch(r"(?:新增|添加|增加|新建|创建|加)+(?:一条|一个)?策略", compact))
+
+
+def _is_add_strategy_details_missing(action: dict, error: str = "") -> bool:
+    """判断 add_strategy 是否因为缺少可落地配置而被拒绝。"""
+    if not isinstance(action, dict) or action.get("action") != "add_strategy":
+        return False
+    params = action.get("params", {}) if isinstance(action.get("params", {}), dict) else {}
+    missing_errors = (
+        "add_strategy 缺少 id 字段",
+        "add_strategy 缺少 name 字段",
+        "add_strategy 至少需要一个触发条件",
+        "add_strategy 至少需要一个执行步骤",
+    )
+    if error in missing_errors:
+        return True
+    return not params.get("id") or not params.get("name") or not params.get("triggers") or not params.get("steps")
+
+
 def _find_strategy_by_id(strategy_id: str, strategies_list):
     if not strategy_id:
         return None
@@ -868,7 +962,7 @@ def _extract_explicit_delete_target(message: str) -> tuple[str, str]:
 
 
 def _resolve_strategy_action_targets(message: str, actions: list[dict], strategies_list) -> tuple[list[dict], str]:
-    """对高危策略动作做确定性目标解析，避免 LLM 猜 ID 或误判真实短 ID。
+    """对高危策略动作做确定性目标解析，避免 LLM 猜 ID 或补默认配置。
 
     返回值：
     - actions: 解析后的动作；目标不明确的删除动作会被移除
@@ -878,6 +972,10 @@ def _resolve_strategy_action_targets(message: str, actions: list[dict], strategi
     reply = ""
 
     for action in actions:
+        if action.get("action") == "add_strategy" and _is_bare_add_request(message):
+            reply = ADD_DETAILS_REQUIRED_MESSAGE
+            continue
+
         if action.get("action") != "delete_strategy":
             resolved_actions.append(action)
             continue
@@ -964,6 +1062,10 @@ def _verify_action_format(action: dict) -> tuple[bool, str]:
             return False, "triggers 必须是列表"
         if not isinstance(params.get("steps", []), list):
             return False, "steps 必须是列表"
+        if not params.get("triggers"):
+            return False, "add_strategy 至少需要一个触发条件"
+        if not params.get("steps"):
+            return False, "add_strategy 至少需要一个执行步骤"
 
     elif action_name == "delete_strategy":
         sid = params.get("strategy_id", "")
@@ -1034,7 +1136,7 @@ def _get_verifier_model():
     return None, "off"
 
 
-async def _run_llm_judge(user_message, actions, intent):
+async def _run_llm_judge(user_message, actions, intent, trace_id=""):
     """执行 LLM-as-a-Judge 监视（按强度策略）
 
     注意：本函数在 _call_langchain_agent（async）中被调用，
@@ -1084,6 +1186,7 @@ async def _run_llm_judge(user_message, actions, intent):
         except Exception as e:
             print(f"[监视模型] 审查异常: {str(e)[:100]}")
             # 审查异常降级为通过
+            _audit_ai("监视模型", trace_id=trace_id, intent=intent, action=act.get("action", ""), result="fallback_allow", reason=str(e)[:100])
             approved_actions.append(act)
             continue
 
@@ -1099,9 +1202,11 @@ async def _run_llm_judge(user_message, actions, intent):
                 # warn_only：不拦截，只警告
                 approved_actions.append(act)
                 warnings.append(f"⚠️ 监视模型警告（{act.get('action')}）：{reason}")
+                _audit_ai("监视模型", result="warn", level="warning", trace_id=trace_id, intent=intent, action=act.get("action", ""), reason=reason)
             else:
                 # strong / high_risk_only：拦截该动作
                 warnings.append(f"❌ 监视模型拒绝执行（{act.get('action')}）：{reason}")
+                _audit_ai("监视模型", result="fail", level="warning", trace_id=trace_id, intent=intent, action=act.get("action", ""), reason=reason)
 
     reply_msg = "\n".join(warnings) if warnings else ""
     return approved_actions, reply_msg

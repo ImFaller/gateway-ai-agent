@@ -82,6 +82,10 @@ tbody tr:hover{background:rgba(255,255,255,.015)}
 .strategy-detail-table .param-cell{min-width:180px;max-width:320px}
 .step-param{display:block;padding:5px 7px;border:1px solid var(--border);border-radius:6px;background:rgba(13,19,33,.8);color:var(--text2);font-family:monospace;font-size:11px;line-height:1.45;white-space:normal;overflow-wrap:anywhere}
 .muted-cell{color:var(--text2)}
+#trashDialog{color:var(--text)}
+#trashDialog table{color:var(--text)}
+#trashDialog td{color:var(--text)}
+#trashDialog .empty{color:var(--text2)}
 
 /* Tags */
 .tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
@@ -220,8 +224,8 @@ select option{background:var(--surface);color:var(--text)}
   </div>
 
   <!-- 回收站弹窗 -->
-  <dialog id="trashDialog" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);margin:0;padding:0;border:none;background:transparent;max-width:none;max-height:none">
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:0;width:680px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column">
+  <dialog id="trashDialog" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);margin:0;padding:0;border:none;background:transparent;max-width:none;max-height:none;color:var(--text)">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:0;width:680px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;color:var(--text)">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
         <div style="font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px">
           <span>&#x1f5d1;&#xfe0f;</span> 策略回收站
@@ -370,6 +374,7 @@ select option{background:var(--surface);color:var(--text)}
           <option value="模型">模型</option>
           <option value="设置">设置</option>
           <option value="认证">认证</option>
+          <option value="AI">AI 对话</option>
           <option value="安全">安全（注入拦截）</option>
         </select>
       </div>
@@ -682,17 +687,10 @@ function resetSettings() {
   document.getElementById('customBgGroup').style.display = 'none';
 }
 
-// ====== 密码管理（业界模式：bcrypt 哈希 + sessionStorage 会话级缓存）======
-// 前端会话级密码缓存：使用 sessionStorage，关闭标签页即失效，避免用户反复输入
-// 后端每次都用 bcrypt 验证，前端缓存仅是 UX 优化，不是安全机制
-const PWD_CACHE_KEY = 'system_pwd_verified';  // sessionStorage 缓存本次会话已验证的密码
+// ====== 密码管理（业界模式：bcrypt 哈希 + 每次高危操作重新确认）======
+// 高危操作每次都弹出密码确认框，不缓存已验证密码，避免后续策略增删绕过二次确认。
+const PWD_CACHE_KEY = 'system_pwd_verified';
 
-function getCachedPassword() {
-  try { return sessionStorage.getItem(PWD_CACHE_KEY) || ''; } catch(e) { return ''; }
-}
-function setCachedPassword(pwd) {
-  try { sessionStorage.setItem(PWD_CACHE_KEY, pwd); } catch(e) {}
-}
 function clearCachedPassword() {
   try { sessionStorage.removeItem(PWD_CACHE_KEY); } catch(e) {}
 }
@@ -851,17 +849,12 @@ function toggleResetGuide() {
   if (el) el.style.display = (el.style.display === 'none' ? 'block' : 'none');
 }
 
-// 获取密码（优先用 sessionStorage 缓存，否则弹框询问 + 后端校验 + 重试）
-// 业界做法：sudo / 浏览器主密码 / 任何二次确认流程
-//   1. 密码错误 → 不缓存，允许重试（最多 3 次，防止无脑爆破）
-//   2. 密码正确 → 缓存到 sessionStorage，避免后续重复输入
-//   3. 用户取消 → 不缓存，下次仍弹框
-//   4. 已有缓存 → 直接返回，不再弹框（用户体验）
-// 这样调 用方拿到的密码保证是后端校验通过的，避免"缓存了错密码"的 bug
+// 获取密码（每次弹框询问 + 后端校验 + 重试）
+//   1. 密码错误 → 允许重试（最多 3 次，防止无脑爆破）
+//   2. 密码正确 → 返回本次输入的密码，但不缓存
+//   3. 用户取消 → 直接取消本次操作
+// 这样每次高危操作都会重新弹出二次确认框。
 async function getVerifiedPassword(actionDesc) {
-  var cached = getCachedPassword();
-  if (cached) return cached;
-
   var MAX_RETRY = 3;  // 最多重试 3 次（含首次），防止暴力试密码
   var lastErr = "";
   for (var i = 0; i < MAX_RETRY; i++) {
@@ -883,8 +876,6 @@ async function getVerifiedPassword(actionDesc) {
       body: JSON.stringify({password: pwd, action: actionDesc || ''})
     }).then(function(r){return r.json();}).catch(function(){return {status:'error', message:'网络错误'};});
     if (verifyResp.status === 'ok') {
-      // 校验通过 → 缓存
-      setCachedPassword(pwd);
       return pwd;
     } else {
       lastErr = verifyResp.message || '密码错误';
@@ -1004,6 +995,7 @@ async function sendChat() {
 
     if (r.actions && r.actions.length > 0) {
       for (const action of r.actions) {
+        if (r.trace_id) action.trace_id = r.trace_id;
         addChatMsg("system", `正在执行: ${action.action}...`);
         // 加超时控制，避免请求无限等待（密码弹框需要更长超时）
         const controller = new AbortController();
@@ -2027,6 +2019,7 @@ async function sendSliderChat() {
     if (r.actions && r.actions.length > 0) {
       for (var i = 0; i < r.actions.length; i++) {
         var action = r.actions[i];
+        if (r.trace_id) action.trace_id = r.trace_id;
         addSliderMsg('system', '正在执行: ' + action.action);
         var result = await fetch(API + '/chat/execute-action', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(action)}).then(function(r){return r.json()});
         if (result.status === 'ok') {
